@@ -20,7 +20,7 @@ import sys
 import seaborn as sns
 import logging
 import os 
-from data_preprocess import * 
+from NIDS.package.data_preprocess import * 
 from joblib import dump, load
 import subprocess
 import json 
