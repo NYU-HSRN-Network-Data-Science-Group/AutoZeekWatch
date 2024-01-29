@@ -1,0 +1,14 @@
+[Unit]
+Description=Network Anomaly Detection Service
+After=network.target
+
+[Service]
+Type=simple
+Restart=always
+ExecStart= /usr/bin/python3 /opt/zeek/kitnet/pred_kitnet.py
+KillMode = process
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target
