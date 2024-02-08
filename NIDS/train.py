@@ -53,8 +53,7 @@ def train_batch(kit, np_arr):
     main exits we dump it to disk.
     """
     logging.info("Hello from train_batch. Please implement me :)")
-
-
+    # TODO: run partial fit over the np_arr
 
 def main():
     """

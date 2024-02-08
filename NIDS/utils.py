@@ -20,18 +20,25 @@ import pandas as pd
 import gzip
 import numpy as np
 import json
-
-
+import logging
+# TODO: is there a better way to handle multi-file logging aside from spamming these everywhere?
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s)')
 
 def preprocess_json(json_batch):
     """
-    This function receives a json batch from the main control flow of the train (and soon the infer) 
+    This function receives a json batch from the main control flow of the train 
     functions. It should convert the json_batch to a numpy 2D array, apply necessary transformations,
     then return it. 
     """
     # TODO: add the featureset here 
     # TODO: should we move this feature set somewhere else?
-    features = ['id.orig_h']
+    features = ['id.orig_p', "id.resp_p", "proto", "conn_state", "missed_bytes",
+                "orig_pkts", "orig_ip_bytes", "resp_pkts", "resp_ip_bytes"]
+    # add the following features ['duration', 'history']
+    # TODO: @olive please run the script as is, it should work.
+    # However, some log records in json do not have duration or history fields.
+    # Please catch this error, and if there is no duration, add a duration of 0 to the record. 
+    # If there is no history, add a history, with the value "N"
     data_list = []
     for line in json_batch.splitlines():
         # log_entry is now a single json log from the file
@@ -39,7 +46,9 @@ def preprocess_json(json_batch):
         data_list.append([log_entry[feature] for feature in features])
     np_arr = np.array(data_list)
     # print(np_arr) # np_arr is now a numpy 2D array
-    # TODO: apply transformations based on 
+    # TODO: apply transformations based on last semesters work
+    logging.info("Hello from preprocess_json. Please implement me :)")
+    return np_arr
 
 
 
