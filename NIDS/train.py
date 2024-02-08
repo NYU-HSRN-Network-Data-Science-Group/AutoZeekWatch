@@ -45,9 +45,16 @@ def ungzip(file_path):
         file_content = gz_file.read()
     return file_content.decode('utf-8')
 
-def preprocess_data(json_data):
-    # TODO: 
-    ...
+def train_batch(kit, np_arr):
+    """
+    takes a 2D numpy array and trains the next batch for the KitNET model.
+    Please use fit_partial() for this. Also, you will need to pass the model to this 
+    function so please instantiate it somewhere. Keep it in memory and right before 
+    main exits we dump it to disk.
+    """
+    logging.info("Hello from train_batch. Please implement me :)")
+
+
 
 def main():
     """
@@ -61,6 +68,9 @@ def main():
                         help='Zeek logdir variable, where this script can find Zeek data.')
     args = parser.parse_args()
     log_dir = args.log_dir
+    # create kitnet model
+    # TODO: make the model parameters as arguments of the script but have default values in case not passed.
+    kit = KitNet(max_size_ae=30, grace_feature_mapping=5000, grace_anomaly_detector=50000, learning_rate=0.001, hidden_ratio=0.5)
     logging.info(f"Using logdir: {log_dir}")
     for sub_dir in os.listdir(log_dir):
         # TODO: we assume all things caught by this os.listdir are folders (standard), what if theyre not though?
@@ -76,7 +86,11 @@ def main():
                     # get the whole file in memory
                     logging.info(f"Opening file {current_file_path}")
                     json_data_file = ungzip(current_file_path)
-                    processed_json = preprocess_json(json_data_file)
+                    # process json and give back a np_array (in utils)
+                    np_arr = preprocess_json(json_data_file)
+                    train_batch(kit, np_arr)
+    # TODO: Before we exit the main function, dump the trained model to disk
+
 
 
 
