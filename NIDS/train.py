@@ -11,7 +11,7 @@ Authors:
 - Zihang Xia <zx961@nyu.edu>
 """
 import argparse
-import mlflow
+# import mlflow
 import random
 import pandas as pd
 import matplotlib.pyplot as plt
