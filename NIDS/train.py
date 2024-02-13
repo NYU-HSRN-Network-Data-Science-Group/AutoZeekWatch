@@ -32,7 +32,6 @@ import gzip
 from utils import *
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s)')
-#MODEL_PATH = 'kit.joblib'
 #LOAD_MODEL = False       
 
 def ungzip(file_path):
