@@ -64,13 +64,30 @@ def main():
     parser = argparse.ArgumentParser(
         description='Trains a KitNET model on the specified log directory. The logs MUST have been stored in JSON format.')
     parser.add_argument('--log-dir', type=str, required=True, 
-                        help='Zeek logdir variable, where this script can find Zeek data.')
+                        help='Zeek logdir variable, where this script can find Zeek data.') 
+    parser.add_argument('--max-size-ae', type=int, default=30, 
+                        help='The maximum size of the autoencoder.')    
+    parser.add_argument('--grace-feature-mapping', type=int, default=5000,  
+                        help='The grace period for feature mapping.')     
+    parser.add_argument('--grace-anomaly-detector', type=int, default=50000,    
+                        help='The grace period for the anomaly detector.')  
+    parser.add_argument('--learning-rate', type=float, default=0.001,    
+                        help='The learning rate for the model.')
+    parser.add_argument('--hidden-ratio', type=float, default=0.5,  
+                        help='The hidden ratio for the model.')  
     args = parser.parse_args()
     log_dir = args.log_dir
     # create kitnet model
     # TODO: make the model parameters as arguments of the script but have default values in case not passed.
-    kit = KitNet(max_size_ae=30, grace_feature_mapping=5000, grace_anomaly_detector=50000, learning_rate=0.001, hidden_ratio=0.5)
-    logging.info(f"Using logdir: {log_dir}")
+    # kit = KitNet(max_size_ae=30, grace_feature_mapping=5000, grace_anomaly_detector=50000, learning_rate=0.001, hidden_ratio=0.5) 
+    kit = KitNet(
+        max_size_ae=args.max_size_ae, 
+        grace_feature_mapping=args.grace_feature_mapping, 
+        grace_anomaly_detector=args.grace_anomaly_detector, 
+        learning_rate=args.learning_rate, 
+        hidden_ratio=args.hidden_ratio 
+    )
+    logging.info(f"Using logdir: {log_dir}") 
     for sub_dir in os.listdir(log_dir):
         # TODO: we assume all things caught by this os.listdir are folders (standard), what if theyre not though?
         current_dir_path = os.path.join(log_dir, sub_dir)
@@ -89,8 +106,6 @@ def main():
                     np_arr = preprocess_json(json_data_file)
                     train_batch(kit, np_arr)
     # TODO: Before we exit the main function, dump the trained model to disk
-
-
 
 
 
