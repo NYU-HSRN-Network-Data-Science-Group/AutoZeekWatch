@@ -94,7 +94,7 @@ def main():
                     # process json and give back a np_array (in utils)
                     np_arr = preprocess_json(json_data_file)
                     train_batch(kit, np_arr)
-    # TODO: Before we exit the main function, dump the trained model to disk
+    # TODO: Before we exit the main function, dump the trained model to disk 
 
 
 
