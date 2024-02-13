@@ -75,6 +75,8 @@ def main():
                         help='The learning rate for the model.')
     parser.add_argument('--hidden-ratio', type=float, default=0.5,  
                         help='The hidden ratio for the model.')  
+    parser.add_argument('--model-path', type=str, default='kit.joblib',  
+                        help='The path to the model file to dump.') 
     args = parser.parse_args()
     log_dir = args.log_dir
     # create kitnet model
@@ -108,6 +110,9 @@ def main():
                     np_arr = preprocess_json(json_data_file)
                     train_batch(kit, np_arr)
     # TODO: Before we exit the main function, dump the trained model to disk
+    dump(kit, args.model_path) 
+    logging.info(f"Model is saved successfully as {args.model_path}.") 
+
 
 
 
