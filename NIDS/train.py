@@ -94,8 +94,8 @@ def main():
         f"hidden_ratio: {args.hidden_ratio}"
     )
     for sub_dir in os.listdir(log_dir):
-        # TODO: we assume all things caught by this os.listdir are folders (standard), what if theyre not though?  
         current_dir_path = os.path.join(log_dir, sub_dir) 
+        # skip non-directory items in the top level logs/ folder
         if not os.path.isdir(current_dir_path): 
             continue     
         # `current` is a symlink for the current-day logs, we should not train on them as these files are in use. 
