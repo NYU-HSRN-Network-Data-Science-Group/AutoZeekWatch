@@ -32,6 +32,7 @@ import gzip
 from utils import *
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s)')
+#MODEL_PATH = 'kit.joblib'
 #LOAD_MODEL = False       
 
 def ungzip(file_path):
@@ -62,18 +63,40 @@ def main():
     """
     parser = argparse.ArgumentParser(
         description='Trains a KitNET model on the specified log directory. The logs MUST have been stored in JSON format.')
-    parser.add_argument('--log-dir', type=str, required=True, 
-                        help='Zeek logdir variable, where this script can find Zeek data.') 
     # Eventually we will need to implement some sort of directory to house these as people will retrain
     # and will still need access to historical models
     parser.add_argument('--model-path', type=str, default='kit.joblib',  
                         help='The path to the model file to dump.') 
+    parser.add_argument('--log-dir', type=str, required=True, 
+                        help='Zeek logdir variable, where this script can find Zeek data.') 
+    parser.add_argument('--max-size-ae', type=int, default=30, 
+                        help='The maximum size of the autoencoder.')    
+    parser.add_argument('--grace-feature-mapping', type=int, default=5000,  
+                        help='The grace period for feature mapping.')     
+    parser.add_argument('--grace-anomaly-detector', type=int, default=50000,    
+                        help='The grace period for the anomaly detector.')  
+    parser.add_argument('--learning-rate', type=float, default=0.001,    
+                        help='The learning rate for the model.')
+    parser.add_argument('--hidden-ratio', type=float, default=0.5,  
+                        help='The hidden ratio for the model.')  
     args = parser.parse_args()
     log_dir = args.log_dir
     # create kitnet model
-    # TODO: make the model parameters as arguments of the script but have default values in case not passed.
-    kit = KitNet(max_size_ae=30, grace_feature_mapping=5000, grace_anomaly_detector=50000, learning_rate=0.001, hidden_ratio=0.5) 
+    kit = KitNet(
+        max_size_ae=args.max_size_ae, 
+        grace_feature_mapping=args.grace_feature_mapping, 
+        grace_anomaly_detector=args.grace_anomaly_detector, 
+        learning_rate=args.learning_rate, 
+        hidden_ratio=args.hidden_ratio 
+    )
     logging.info(f"Using logdir: {log_dir}") 
+    logging.info(
+        f"Using Parameters - max_size_ae: {args.max_size_ae}, "
+        f"grace_feature_mapping: {args.grace_feature_mapping}, "
+        f"grace_anomaly_detector: {args.grace_anomaly_detector}, "
+        f"learning_rate: {args.learning_rate}, "
+        f"hidden_ratio: {args.hidden_ratio}"
+    )
     for sub_dir in os.listdir(log_dir):
         current_dir_path = os.path.join(log_dir, sub_dir) 
         # skip non-directory items in the top level logs/ folder
@@ -96,8 +119,6 @@ def main():
     # TODO: Before we exit the main function, dump the trained model to disk
     dump(kit, args.model_path) 
     logging.info(f"Model is saved successfully as {args.model_path}.") 
-
-
 
 
 
