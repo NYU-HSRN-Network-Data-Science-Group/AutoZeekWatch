@@ -32,6 +32,7 @@ import gzip
 from utils import *
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s)')
+#MODEL_PATH = 'kit.joblib'
 #LOAD_MODEL = False       
 
 def ungzip(file_path):
@@ -62,6 +63,10 @@ def main():
     """
     parser = argparse.ArgumentParser(
         description='Trains a KitNET model on the specified log directory. The logs MUST have been stored in JSON format.')
+    # Eventually we will need to implement some sort of directory to house these as people will retrain
+    # and will still need access to historical models
+    parser.add_argument('--model-path', type=str, default='kit.joblib',  
+                        help='The path to the model file to dump.') 
     parser.add_argument('--log-dir', type=str, required=True, 
                         help='Zeek logdir variable, where this script can find Zeek data.') 
 <<<<<<< HEAD
