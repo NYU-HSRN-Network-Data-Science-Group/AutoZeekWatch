@@ -78,8 +78,6 @@ def main():
     args = parser.parse_args()
     log_dir = args.log_dir
     # create kitnet model
-    # TODO: make the model parameters as arguments of the script but have default values in case not passed.
-    # kit = KitNet(max_size_ae=30, grace_feature_mapping=5000, grace_anomaly_detector=50000, learning_rate=0.001, hidden_ratio=0.5) 
     kit = KitNet(
         max_size_ae=args.max_size_ae, 
         grace_feature_mapping=args.grace_feature_mapping, 
@@ -88,6 +86,13 @@ def main():
         hidden_ratio=args.hidden_ratio 
     )
     logging.info(f"Using logdir: {log_dir}") 
+    logging.info(
+        f"Using Parameters - max_size_ae: {args.max_size_ae}, "
+        f"grace_feature_mapping: {args.grace_feature_mapping}, "
+        f"grace_anomaly_detector: {args.grace_anomaly_detector}, "
+        f"learning_rate: {args.learning_rate}, "
+        f"hidden_ratio: {args.hidden_ratio}"
+    )
     for sub_dir in os.listdir(log_dir):
         # TODO: we assume all things caught by this os.listdir are folders (standard), what if theyre not though?
         current_dir_path = os.path.join(log_dir, sub_dir)
