@@ -83,8 +83,6 @@ def preprocess_json(json_batch):
     return np_arr
 
 
-
-
 #------------------Dataframe Prep------------------#
 def merge_logs(date):
     # This function is used to take in a date and merge all the logs for that date into a single dataframe.
