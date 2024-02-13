@@ -180,7 +180,11 @@ def drop_columns(new_df, columns_to_drop):
     return new_df
 
 def create_history_variable(new_df):
-    # break out history variable
+    # break out history variable 
+
+    # if there is no 'history' column, create one and fill with 'N'  
+    if 'history' not in new_df.columns: 
+        new_df['history'] = 'N'   
     
     #fill NaNs with 'N'
     new_df['history'] = new_df['history'].fillna('N') 
