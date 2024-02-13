@@ -111,7 +111,13 @@ def main():
                 if "conn." in file:
                     # get the whole file in memory
                     logging.info(f"Opening file {current_file_path}")
-                    json_data_file = ungzip(current_file_path)
+                    json_data_file = ungzip(current_file_path) 
+                    # check that this file is json, if not, catch the error and skip it 
+                    try:
+                        json_data_file = json.loads(json_data_file)
+                    except json.JSONDecodeError as e:
+                        logging.error(f"File {current_file_path} is not JSON. Skipping.")
+                        continue 
                     # process json and give back a np_array (in utils)
                     np_arr = preprocess_json(json_data_file)
                     train_batch(kit, np_arr)
