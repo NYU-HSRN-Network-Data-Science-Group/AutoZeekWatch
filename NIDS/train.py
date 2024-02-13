@@ -72,8 +72,10 @@ def main():
     kit = KitNet(max_size_ae=30, grace_feature_mapping=5000, grace_anomaly_detector=50000, learning_rate=0.001, hidden_ratio=0.5)
     logging.info(f"Using logdir: {log_dir}")
     for sub_dir in os.listdir(log_dir):
-        # TODO: we assume all things caught by this os.listdir are folders (standard), what if theyre not though?
-        current_dir_path = os.path.join(log_dir, sub_dir)
+        # TODO: we assume all things caught by this os.listdir are folders (standard), what if theyre not though?  
+        current_dir_path = os.path.join(log_dir, sub_dir) 
+        if not os.path.isdir(current_dir_path): 
+            continue     
         # `current` is a symlink for the current-day logs, we should not train on them as these files are in use. 
         if not os.path.islink(current_dir_path):
             # sub_dir is now any given historical data directory 
