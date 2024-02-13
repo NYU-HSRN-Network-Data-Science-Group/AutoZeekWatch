@@ -79,6 +79,8 @@ def preprocess_json(json_batch):
     # Convert DataFrame to NumPy array
     np_arr = new_df.to_numpy()# np_arr is now a numpy 2D array
     
+    print(np_arr[:5]) 
+    print(np_arr.shape)  
     logging.info("Hello from preprocess_json. Please implement me :)")
     return np_arr
 
