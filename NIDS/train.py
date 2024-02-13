@@ -32,7 +32,6 @@ import gzip
 from utils import *
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s)')
-#MODEL_PATH = 'kit.joblib'
 #LOAD_MODEL = False       
 
 def ungzip(file_path):
@@ -94,8 +93,10 @@ def main():
         f"hidden_ratio: {args.hidden_ratio}"
     )
     for sub_dir in os.listdir(log_dir):
-        # TODO: we assume all things caught by this os.listdir are folders (standard), what if theyre not though?
-        current_dir_path = os.path.join(log_dir, sub_dir)
+        current_dir_path = os.path.join(log_dir, sub_dir) 
+        # skip non-directory items in the top level logs/ folder
+        if not os.path.isdir(current_dir_path): 
+            continue     
         # `current` is a symlink for the current-day logs, we should not train on them as these files are in use. 
         if not os.path.islink(current_dir_path):
             # sub_dir is now any given historical data directory 
@@ -111,6 +112,9 @@ def main():
                     np_arr = preprocess_json(json_data_file)
                     train_batch(kit, np_arr)
     # TODO: Before we exit the main function, dump the trained model to disk
+    dump(kit, args.model_path) 
+    logging.info(f"Model is saved successfully as {args.model_path}.") 
+
 
 
 
