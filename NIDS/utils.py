@@ -77,8 +77,7 @@ def preprocess_json(json_batch):
     new_df = drop_columns(new_df, ['orig_l2_addr','resp_l2_addr'])
 
     # Convert DataFrame to NumPy array
-    np_arr = new_df.to_numpy()# np_arr is now a numpy 2D array
-    
+    np_arr = new_df.to_numpy(dtype=np.float32)
     logging.info("Hello from preprocess_json. Please implement me :)")
     return np_arr
 
