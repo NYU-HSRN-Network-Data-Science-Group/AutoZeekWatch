@@ -40,7 +40,13 @@ def preprocess_json(json_batch):
     # TODO: @olive please run the script as is, it should work.
     # However, some log records in json do not have duration or history fields.
     # Please catch this error, and if there is no duration, add a duration of 0 to the record. 
-    # If there is no history, add a history, with the value "N"
+    # If there is no history, add a history, with the value "N" 
+    
+    if 'history' not in new_df.columns: 
+        new_df['history'] = 'N'  
+    if 'duration' not in new_df.columns:    
+        new_df['duration'] = 0   
+        
     data_list = []
     for line in json_batch.splitlines():
         # log_entry is now a single json log from the file
@@ -178,11 +184,7 @@ def drop_columns(new_df, columns_to_drop):
     return new_df
 
 def create_history_variable(new_df):
-    # break out history variable 
-
-    # if there is no 'history' column, create one and fill with 'N'  
-    if 'history' not in new_df.columns: 
-        new_df['history'] = 'N'   
+    # break out history variable  
     
     #fill NaNs with 'N'
     new_df['history'] = new_df['history'].fillna('N') 
