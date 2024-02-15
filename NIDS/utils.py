@@ -40,7 +40,7 @@ def preprocess_json(json_batch):
     # TODO: @olive please run the script as is, it should work.
     # However, some log records in json do not have duration or history fields.
     # Please catch this error, and if there is no duration, add a duration of 0 to the record. 
-    # If there is no history, add a history, with the value "N"
+        
     data_list = []
     for line in json_batch.splitlines():
         # log_entry is now a single json log from the file
@@ -57,6 +57,13 @@ def preprocess_json(json_batch):
     # Drop unnecessary columns 
     new_df = drop_columns(new_df, ['ts','uid','local_orig', 'local_resp'])
     
+     # If there is no history, add a history, with the value "N" 
+    
+    if 'history' not in new_df.columns: 
+        new_df['history'] = 'N'  
+    if 'duration' not in new_df.columns:    
+        new_df['duration'] = 0   
+        
     # create history, broadcast, traffic_direction variables
     new_df = create_history_variable(new_df)
     new_df = create_broadcast_variable(new_df)
