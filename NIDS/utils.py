@@ -43,12 +43,13 @@ def preprocess_json(json_batch):
         
     data_list = []
     for line in json_batch.splitlines():
-        # log_entry is now a single json log from the file
+        # log_entry is now a single json log from the file 
         log_entry = json.loads(line.strip())
         data_list.append([log_entry[feature] for feature in features])
     # np_arr = np.array(data_list)
     
     # TODO: apply transformations based on last semesters work
+
     #Re-use the preprocess function from last sem by Zoe. 
     #TODO: optimize the code via removing pandas
     new_df = pd.DataFrame(data_list, columns=features) 
