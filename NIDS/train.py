@@ -49,8 +49,11 @@ def train_batch(kit, np_arr):
     function so please instantiate it somewhere. Keep it in memory and right before 
     main exits we dump it to disk.
     """
-    logging.info("Hello from train_batch. Please implement me :)")
-    # TODO: run partial fit over the np_arr
+
+    assert len(np_arr.shape) <= 2, "The input array must be shape (n_samples, n_features) or (n_features,)."     
+    kit.fit(np_arr) 
+
+    return kit 
 
 def main():
     """
@@ -113,6 +116,7 @@ def main():
                     # process json and give back a np_array (in utils)
                     np_arr = preprocess_json(json_data_file)
                     train_batch(kit, np_arr)
+
     # TODO: Before we exit the main function, dump the trained model to disk
     dump(kit, args.model_path) 
     logging.info(f"Model is saved successfully as {args.model_path}.") 
