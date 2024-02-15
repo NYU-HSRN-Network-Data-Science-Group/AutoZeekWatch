@@ -29,6 +29,8 @@ def preprocess_json(json_batch):
     This function receives a json batch from the main control flow of the train 
     functions. It should convert the json_batch to a numpy 2D array, apply necessary transformations,
     then return it. 
+
+    Note: the input is only one unzipped json file. 
     """
     # TODO: add the featureset here 
     # TODO: should we move this feature set somewhere else?
@@ -38,19 +40,53 @@ def preprocess_json(json_batch):
     # TODO: @olive please run the script as is, it should work.
     # However, some log records in json do not have duration or history fields.
     # Please catch this error, and if there is no duration, add a duration of 0 to the record. 
-    # If there is no history, add a history, with the value "N"
+        
     data_list = []
     for line in json_batch.splitlines():
         # log_entry is now a single json log from the file
         log_entry = json.loads(line.strip())
         data_list.append([log_entry[feature] for feature in features])
-    np_arr = np.array(data_list)
-    # print(np_arr) # np_arr is now a numpy 2D array
+    # np_arr = np.array(data_list)
+    
     # TODO: apply transformations based on last semesters work
+    #Re-use the preprocess function from last sem by Zoe. 
+    #TODO: optimize the code via removing pandas
+    new_df = pd.DataFrame(data_list, columns=features) 
+    #Fill NaNs with 0s : duration, orig_bytes resp_bytes, if there are no columns, create one and fill with 0s 
+    new_df = fill_na(new_df) 
+    # Drop unnecessary columns 
+    new_df = drop_columns(new_df, ['ts','uid','local_orig', 'local_resp'])
+    
+     # If there is no history, add a history, with the value "N" 
+    
+    if 'history' not in new_df.columns: 
+        new_df['history'] = 'N'  
+    if 'duration' not in new_df.columns:    
+        new_df['duration'] = 0   
+        
+    # create history, broadcast, traffic_direction variables
+    new_df = create_history_variable(new_df)
+    new_df = create_broadcast_variable(new_df)
+    new_df = create_direction_variable(new_df)
+
+    # one hot encode categorical variables
+    column_name = ['conn_state', "proto", "traffic_direction" , "service"]
+    for col in column_name:
+        if col in new_df.columns:
+            new_df = one_hot_encode(new_df, [col])
+    # new_df = new_df.drop(columns=['id.orig_h', 'id.resp_h'])
+
+    new_df = drop_columns(new_df, ['id.orig_h', 'id.resp_h'])
+
+    # make sure the columns are the same as the original df
+    new_df = makedf_samecol(new_df)
+    # new_df = new_df.drop(columns=['orig_l2_addr','resp_l2_addr'])
+    new_df = drop_columns(new_df, ['orig_l2_addr','resp_l2_addr'])
+
+    # Convert DataFrame to NumPy array
+    np_arr = new_df.to_numpy(dtype=np.float32)
     logging.info("Hello from preprocess_json. Please implement me :)")
     return np_arr
-
-
 
 
 #------------------Dataframe Prep------------------#
@@ -141,31 +177,52 @@ def get_traffic_direction(source_ip, destination_ip):
         return "incoming"
     else:
         return "external"
-    
+
+def drop_columns(new_df, columns_to_drop):
+    columns_to_drop_existing = [col for col in columns_to_drop if col in new_df.columns]
+    new_df.drop(columns=columns_to_drop_existing, axis=1, inplace=True)
+    return new_df
+
 def create_history_variable(new_df):
     # break out history variable
-    if 'history'in new_df.columns:
-        new_df = new_df[new_df['history'].notna()].copy() #filters out rows where the 'history' column is null
-        new_df['history_has_S'] = new_df['history'].apply(lambda x: 1 if "S" in x else 0)
-        new_df['history_has_h'] = new_df['history'].apply(lambda x: 1 if "h" in x else 0)
-        new_df['history_has_A'] = new_df['history'].apply(lambda x: 1 if "A" in x else 0)
-        new_df['history_has_D'] = new_df['history'].apply(lambda x: 1 if "D" in x else 0)
-        new_df['history_has_a'] = new_df['history'].apply(lambda x: 1 if "a" in x else 0)
-        new_df['history_has_d'] = new_df['history'].apply(lambda x: 1 if "d" in x else 0)
-        new_df['history_has_F'] = new_df['history'].apply(lambda x: 1 if "F" in x else 0)
-        new_df['history_has_f'] = new_df['history'].apply(lambda x: 1 if "f" in x else 0)
-        new_df = new_df.drop(columns='history')
-    else: 
-        new_df['history_has_S'] = 0
-        new_df['history_has_h'] = 0
-        new_df['history_has_A'] = 0
-        new_df['history_has_D'] = 0
-        new_df['history_has_a'] = 0
-        new_df['history_has_d'] = 0
-        new_df['history_has_F'] = 0
-        new_df['history_has_f'] = 0
-    # drop ipv6 data
-    new_df = new_df[new_df['id.orig_h'].str.contains("::") == False]
+    
+    #fill NaNs with 'N'
+    new_df['history'] = new_df['history'].fillna('N') 
+
+    new_df['history_has_S'] = new_df['history'].apply(lambda x: 1 if "S" in x else 0)
+    new_df['history_has_h'] = new_df['history'].apply(lambda x: 1 if "h" in x else 0)
+    new_df['history_has_A'] = new_df['history'].apply(lambda x: 1 if "A" in x else 0)
+    new_df['history_has_D'] = new_df['history'].apply(lambda x: 1 if "D" in x else 0)
+    new_df['history_has_a'] = new_df['history'].apply(lambda x: 1 if "a" in x else 0)
+    new_df['history_has_d'] = new_df['history'].apply(lambda x: 1 if "d" in x else 0)
+    new_df['history_has_F'] = new_df['history'].apply(lambda x: 1 if "F" in x else 0)
+    new_df['history_has_f'] = new_df['history'].apply(lambda x: 1 if "f" in x else 0)
+    new_df['history_has_N'] = new_df['history'].apply(lambda x: 1 if "N" in x else 0)
+    new_df = new_df.drop(columns='history')
+
+    # if 'history'in new_df.columns:
+    #     new_df = new_df[new_df['history'].notna()].copy() #filters out rows where the 'history' column is null
+    #     new_df['history_has_S'] = new_df['history'].apply(lambda x: 1 if "S" in x else 0)
+    #     new_df['history_has_h'] = new_df['history'].apply(lambda x: 1 if "h" in x else 0)
+    #     new_df['history_has_A'] = new_df['history'].apply(lambda x: 1 if "A" in x else 0)
+    #     new_df['history_has_D'] = new_df['history'].apply(lambda x: 1 if "D" in x else 0)
+    #     new_df['history_has_a'] = new_df['history'].apply(lambda x: 1 if "a" in x else 0)
+    #     new_df['history_has_d'] = new_df['history'].apply(lambda x: 1 if "d" in x else 0)
+    #     new_df['history_has_F'] = new_df['history'].apply(lambda x: 1 if "F" in x else 0)
+    #     new_df['history_has_f'] = new_df['history'].apply(lambda x: 1 if "f" in x else 0)
+    #     new_df = new_df.drop(columns='history')
+    # else: 
+    #     new_df['history_has_S'] = 0
+    #     new_df['history_has_h'] = 0
+    #     new_df['history_has_A'] = 0
+    #     new_df['history_has_D'] = 0
+    #     new_df['history_has_a'] = 0
+    #     new_df['history_has_d'] = 0
+    #     new_df['history_has_F'] = 0
+    #     new_df['history_has_f'] = 0
+    
+    if 'id.orig_h'in new_df.columns:
+        new_df = new_df[new_df['id.orig_h'].str.contains("::") == False]
     return new_df 
 
 def create_broadcast_variable(new_df):
@@ -223,7 +280,10 @@ def fill_na(new_df):
     #Fill Nans with 0s : duration, orig_bytes resp_bytes
     # Specify the columns you want to fill with zeros
     columns_to_fill_with_zeros = ['duration', 'orig_bytes', 'resp_bytes']
-    # new_df[columns_to_fill_with_zeros].fillna(0, inplace = True)
+    # Check if columns exist; if not, create and fill with zeros
+    for col in columns_to_fill_with_zeros:
+        if col not in new_df.columns:
+            new_df[col] = 0
     new_df[columns_to_fill_with_zeros] = new_df[columns_to_fill_with_zeros].fillna(0)
     
 
