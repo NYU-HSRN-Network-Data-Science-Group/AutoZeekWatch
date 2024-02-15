@@ -309,7 +309,7 @@ def makedf_samecol(new_df):
     for col in cols:
         if col not in new_df.columns:
             new_df[col] = 0
-    return new_df
+    return new_df[cols]
 
 #------------------Online Normalization------------------#
 #TODO: def online_normalization(new_df):
