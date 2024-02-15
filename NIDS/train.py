@@ -66,7 +66,6 @@ def main():
                         help='The path to the model file to dump.') 
     parser.add_argument('--log-dir', type=str, required=True, 
                         help='Zeek logdir variable, where this script can find Zeek data.') 
-<<<<<<< HEAD
     parser.add_argument('--max-size-ae', type=int, default=30, 
                         help='The maximum size of the autoencoder.')    
     parser.add_argument('--grace-feature-mapping', type=int, default=5000,  
@@ -100,19 +99,6 @@ def main():
         # skip non-directory items in the top level logs/ folder
         if not os.path.isdir(current_dir_path): 
             continue     
-=======
-    parser.add_argument('--model-path', type=str, default='kit.joblib',  
-                        help='The path to the model file to dump.') 
-    args = parser.parse_args()
-    log_dir = args.log_dir
-    # create kitnet model
-    # TODO: make the model parameters as arguments of the script but have default values in case not passed.
-    kit = KitNet(max_size_ae=30, grace_feature_mapping=5000, grace_anomaly_detector=50000, learning_rate=0.001, hidden_ratio=0.5) 
-    logging.info(f"Using logdir: {log_dir}") 
-    for sub_dir in os.listdir(log_dir):
-        # TODO: we assume all things caught by this os.listdir are folders (standard), what if theyre not though?  
-        current_dir_path = os.path.join(log_dir, sub_dir)    
->>>>>>> dfc7ed8 (dump trained model + add model-path arg)
         # `current` is a symlink for the current-day logs, we should not train on them as these files are in use. 
         if not os.path.islink(current_dir_path):
             # sub_dir is now any given historical data directory 
