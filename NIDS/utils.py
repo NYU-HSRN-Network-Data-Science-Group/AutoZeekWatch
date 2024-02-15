@@ -38,7 +38,13 @@ def preprocess_json(json_batch):
     # TODO: @olive please run the script as is, it should work.
     # However, some log records in json do not have duration or history fields.
     # Please catch this error, and if there is no duration, add a duration of 0 to the record. 
-    # If there is no history, add a history, with the value "N"
+    # If there is no history, add a history, with the value "N" 
+    
+    if 'history' not in new_df.columns: 
+        new_df['history'] = 'N'  
+    if 'duration' not in new_df.columns:    
+        new_df['duration'] = 0   
+        
     data_list = []
     for line in json_batch.splitlines():
         # log_entry is now a single json log from the file
@@ -141,6 +147,49 @@ def get_traffic_direction(source_ip, destination_ip):
         return "incoming"
     else:
         return "external"
+
+def drop_columns(new_df, columns_to_drop):
+    columns_to_drop_existing = [col for col in columns_to_drop if col in new_df.columns]
+    new_df.drop(columns=columns_to_drop_existing, axis=1, inplace=True)
+    return new_df
+
+def create_history_variable(new_df):
+    # break out history variable  
+    
+    #fill NaNs with 'N'
+    new_df['history'] = new_df['history'].fillna('N') 
+
+    new_df['history_has_S'] = new_df['history'].apply(lambda x: 1 if "S" in x else 0)
+    new_df['history_has_h'] = new_df['history'].apply(lambda x: 1 if "h" in x else 0)
+    new_df['history_has_A'] = new_df['history'].apply(lambda x: 1 if "A" in x else 0)
+    new_df['history_has_D'] = new_df['history'].apply(lambda x: 1 if "D" in x else 0)
+    new_df['history_has_a'] = new_df['history'].apply(lambda x: 1 if "a" in x else 0)
+    new_df['history_has_d'] = new_df['history'].apply(lambda x: 1 if "d" in x else 0)
+    new_df['history_has_F'] = new_df['history'].apply(lambda x: 1 if "F" in x else 0)
+    new_df['history_has_f'] = new_df['history'].apply(lambda x: 1 if "f" in x else 0)
+    new_df['history_has_N'] = new_df['history'].apply(lambda x: 1 if "N" in x else 0)
+    new_df = new_df.drop(columns='history')
+
+    # if 'history'in new_df.columns:
+    #     new_df = new_df[new_df['history'].notna()].copy() #filters out rows where the 'history' column is null
+    #     new_df['history_has_S'] = new_df['history'].apply(lambda x: 1 if "S" in x else 0)
+    #     new_df['history_has_h'] = new_df['history'].apply(lambda x: 1 if "h" in x else 0)
+    #     new_df['history_has_A'] = new_df['history'].apply(lambda x: 1 if "A" in x else 0)
+    #     new_df['history_has_D'] = new_df['history'].apply(lambda x: 1 if "D" in x else 0)
+    #     new_df['history_has_a'] = new_df['history'].apply(lambda x: 1 if "a" in x else 0)
+    #     new_df['history_has_d'] = new_df['history'].apply(lambda x: 1 if "d" in x else 0)
+    #     new_df['history_has_F'] = new_df['history'].apply(lambda x: 1 if "F" in x else 0)
+    #     new_df['history_has_f'] = new_df['history'].apply(lambda x: 1 if "f" in x else 0)
+    #     new_df = new_df.drop(columns='history')
+    # else: 
+    #     new_df['history_has_S'] = 0
+    #     new_df['history_has_h'] = 0
+    #     new_df['history_has_A'] = 0
+    #     new_df['history_has_D'] = 0
+    #     new_df['history_has_a'] = 0
+    #     new_df['history_has_d'] = 0
+    #     new_df['history_has_F'] = 0
+    #     new_df['history_has_f'] = 0
     
 def create_history_variable(new_df):
     # break out history variable
