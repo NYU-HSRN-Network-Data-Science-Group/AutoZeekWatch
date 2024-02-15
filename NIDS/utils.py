@@ -38,15 +38,17 @@ def preprocess_json(json_batch):
     # TODO: @olive please run the script as is, it should work.
     # However, some log records in json do not have duration or history fields.
     # Please catch this error, and if there is no duration, add a duration of 0 to the record. 
+
     # If there is no history, add a history, with the value "N"
     data_list = []
     for line in json_batch.splitlines():
-        # log_entry is now a single json log from the file
+        # log_entry is now a single json log from the file 
         log_entry = json.loads(line.strip())
         data_list.append([log_entry[feature] for feature in features])
     np_arr = np.array(data_list)
     # print(np_arr) # np_arr is now a numpy 2D array
     # TODO: apply transformations based on last semesters work
+
     logging.info("Hello from preprocess_json. Please implement me :)")
     return np_arr
 
