@@ -46,10 +46,34 @@ def main():
     logging.info(f"Using logdir: {log_dir}")
     spool_path = os.path.join(log_dir, "current") 
     logging.info(f"Using spool path: {spool_path}")
-    conn_log_path = os.path.join(spool_path, "conn.log") 
+    conn_log_path = os.path.join(spool_path, "conn.log")
+    model_path = args.model_path
+    logging.info(f"Using model path: {model_path}")
+
+    # Loading KitNet model from file
+    try:
+        kit = load(model_path)
+    except FileNotFoundError:
+        logging.error(f"Could not find model path {model_path}")
+        sys.exit(1)
     # tail the conn.log file in the spool directory
     for line in tailer.follow(open(conn_log_path)):
-        print(line)
+        result = score_json(kit, line)
+        print(result)
+
+
+def score_json(kit, line):
+    """
+    Given a line from the processed json, fit the model using new data and return the anomaly score.
+    The result is returned as a dataframe containing the original vector, json, and anomaly score
+    """
+    line_processed = preprocess_json(line)
+    assert len(line_processed) == 1
+    # or use score_partial to only get score and not fit with new data
+    anomaly_score = kit.fit_score_partial(line_processed[0])
+    result = pd.DataFrame(data={'input_vector': line_processed[0], 'anomaly_score': anomaly_score, 'json': line})
+    return result
+
 
 if __name__ == "__main__":
     main()
