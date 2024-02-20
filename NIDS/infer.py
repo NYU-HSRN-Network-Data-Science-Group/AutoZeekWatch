@@ -65,13 +65,13 @@ def main():
 def score_json(kit, line):
     """
     Given a line from the processed json, fit the model using new data and return the anomaly score.
-    The result is returned as a dataframe containing the original vector, json, and anomaly score
+    The result is returned as a dictionary containing the original vector, json, and anomaly score
     """
     line_processed = preprocess_json(line)
     assert len(line_processed) == 1
     # or use score_partial to only get score and not fit with new data
     anomaly_score = kit.fit_score_partial(line_processed[0])
-    result = pd.DataFrame(data={'input_vector': line_processed[0], 'anomaly_score': anomaly_score, 'json': line})
+    result = dict({'input_vector': line_processed[0], 'anomaly_score': anomaly_score, 'json': line})
     return result
 
 
