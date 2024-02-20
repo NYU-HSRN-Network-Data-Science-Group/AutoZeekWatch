@@ -28,6 +28,18 @@ from datetime import datetime
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s)')
 
+# create logger for writing anomaly to file
+anomaly_logger = logging.getLogger('anomaly')
+anomaly_logger.setLevel(logging.INFO)
+
+# create file handler
+fh = logging.FileHandler('anomalies.log')
+file_formatter = logging.Formatter('%(asctime)s - %(message)s')
+fh.setLevel(logging.INFO)
+fh.setFormatter(file_formatter)
+anomaly_logger.addHandler(fh)
+
+
 def main():
     """
     The main control flow for the application. This script takes in as arguments the 
@@ -36,11 +48,13 @@ def main():
     which can be applied to Zeek by adding "@load policy/tuning/json-logs.zeek" to local.zeek.
     """
     parser = argparse.ArgumentParser(
-        description='Apply a KitNET model to current data and output anomaly scores. The logs MUST have been stored in JSON format.')
+        description='Apply a KitNET model to current data and output anomaly scores. The logs MUST have been stored '
+                    'in JSON format.')
     parser.add_argument('--model-path', type=str, default='kit.joblib',  
                         help='The path to the model file to load.') 
     parser.add_argument('--log-dir', type=str, required=True, 
-                        help='Zeek logdir variable, where this script can find Zeek data. Please point to the logs/ directory.') 
+                        help='Zeek logdir variable, where this script can find Zeek data. Please point to the logs/ '
+                             'directory.')
     args = parser.parse_args()
     log_dir = args.log_dir
     logging.info(f"Using logdir: {log_dir}")
@@ -59,20 +73,24 @@ def main():
     # tail the conn.log file in the spool directory
     for line in tailer.follow(open(conn_log_path)):
         result = score_json(kit, line)
-        print(result)
+        anomaly_logger.info(result)
 
 
 def score_json(kit, line):
     """
     Given a line from the processed json, fit the model using new data and return the anomaly score.
-    The result is returned as a dictionary containing the original vector, json, and anomaly score
+    The result is returned as a dictionary containing the original json, and anomaly score
     """
     line_processed = preprocess_json(line)
     assert len(line_processed) == 1
-    # or use score_partial to only get score and not fit with new data
-    anomaly_score = kit.fit_score_partial(line_processed[0])
-    result = dict({'input_vector': line_processed[0], 'anomaly_score': anomaly_score, 'json': line})
-    return result
+    features = ['uid', "id.resp_h", "id.orig_h", "id.orig_p", "id.resp_p", "proto"]
+    features_obj = json.loads(line)
+    features_dict = dict(zip(features, [features_obj[feature] for feature in features]))
+    assert len(features_dict) == 6
+
+    anomaly_score = kit.score_partial(line_processed[0])
+    features_dict['anomaly_score'] = anomaly_score
+    return features_dict
 
 
 if __name__ == "__main__":
