@@ -1,13 +1,10 @@
 """
-This script is used to preprocess the data for the kitnet model.
+This script is used to preprocess the data for the 'KitNET' model.
 Example command:
-root@worker19:/opt/zeek/kitnet# python3 data_preprocess.py 2023-11-18
+NIDS% python train.py --log-dir /usr/local/logs
 
-Check the column names of the output file by using the following command:
-head -n 1 df_2023-11-18.csv
-
-There should be 46 columns in the output file. 
-Different from the iot23 (no_aggre) dataset, it contains service_ntp
+There should be 46 columns in the new dataframe. 
+For the online-normalization, we can skip it for now, since KitNet has its own normalization.
 
 By Zoe Hsu
 
@@ -32,23 +29,15 @@ def preprocess_json(json_batch):
 
     Note: the input is only one unzipped json file. 
     """
-    # TODO: add the featureset here 
-    # TODO: should we move this feature set somewhere else?
+
     features = ['id.orig_p', "id.resp_p", "proto", "conn_state", "missed_bytes",
                 "orig_pkts", "orig_ip_bytes", "resp_pkts", "resp_ip_bytes"]
-    # add the following features ['duration', 'history']
-    # TODO: @olive please run the script as is, it should work.
-    # However, some log records in json do not have duration or history fields.
-    # Please catch this error, and if there is no duration, add a duration of 0 to the record. 
         
     data_list = []
     for line in json_batch.splitlines():
         # log_entry is now a single json log from the file 
         log_entry = json.loads(line.strip())
         data_list.append([log_entry[feature] for feature in features])
-    # np_arr = np.array(data_list)
-    
-    # TODO: apply transformations based on last semesters work
 
     #Re-use the preprocess function from last sem by Zoe. 
     #TODO: optimize the code via removing pandas
@@ -56,14 +45,7 @@ def preprocess_json(json_batch):
     #Fill NaNs with 0s : duration, orig_bytes resp_bytes, if there are no columns, create one and fill with 0s 
     new_df = fill_na(new_df) 
     # Drop unnecessary columns 
-    new_df = drop_columns(new_df, ['ts','uid','local_orig', 'local_resp'])
-    
-     # If there is no history, add a history, with the value "N" 
-    
-    if 'history' not in new_df.columns: 
-        new_df['history'] = 'N'  
-    if 'duration' not in new_df.columns:    
-        new_df['duration'] = 0   
+    new_df = drop_columns(new_df, ['ts','uid','local_orig', 'local_resp']) 
         
     # create history, broadcast, traffic_direction variables
     new_df = create_history_variable(new_df)
@@ -72,67 +54,16 @@ def preprocess_json(json_batch):
 
     # one hot encode categorical variables
     column_name = ['conn_state', "proto", "traffic_direction" , "service"]
-    for col in column_name:
-        if col in new_df.columns:
-            new_df = one_hot_encode(new_df, [col])
-    # new_df = new_df.drop(columns=['id.orig_h', 'id.resp_h'])
-
-    new_df = drop_columns(new_df, ['id.orig_h', 'id.resp_h'])
+    new_df = one_hot_encode(new_df, column_name)
 
     # make sure the columns are the same as the original df
     new_df = makedf_samecol(new_df)
-    # new_df = new_df.drop(columns=['orig_l2_addr','resp_l2_addr'])
-    new_df = drop_columns(new_df, ['orig_l2_addr','resp_l2_addr'])
 
     # Convert DataFrame to NumPy array
     np_arr = new_df.to_numpy(dtype=np.float32)
     logging.info("Hello from preprocess_json. Please implement me :)")
     return np_arr
 
-
-#------------------Dataframe Prep------------------#
-def merge_logs(date):
-    # This function is used to take in a date and merge all the logs for that date into a single dataframe.
-    df_merged = pd.DataFrame()
-
-    # Iterate over the hours and unzip files
-    for hour in range(24):
-        # Create the file paths
-        log_file_path = f"../logs/{date}/conn.{hour:02d}:00:00-{(hour + 1) % 24:02d}:00:00.log.gz"
-        unzipped_file_path = f"../logs/{date}/conn.{hour:02d}:00:00-{(hour + 1) % 24:02d}:00:00.log"
-
-        # Solution-1: Unzip the file
-        unzip_command = f"gunzip -k {log_file_path}"
-        subprocess.run(unzip_command, shell=True)
-
-        # #Solution-2: 
-        # # Unzip the file
-        # with gzip.open(log_file_path, 'rt') as f_in:
-        #     with open(unzipped_file_path, 'w') as f_out:
-        #         f_out.write(f_in.read())
-
-        # Read the unzipped log file into a DataFrame
-        df_hour = pd.read_json(unzipped_file_path, lines=True)
-
-        # Append the data to the merged DataFrame
-        df_merged = pd.concat([df_merged, df_hour], axis = 0, ignore_index=True)
-
-        # Remove the unzipped log file
-        os.remove(unzipped_file_path)
-
-    return df_merged
-
-#TODO : ask Diego. 
-# df has these columns: ts,uid,id.orig_h,id.orig_p,id.resp_h,id.resp_p,proto,duration,orig_bytes,resp_bytes,conn_state,local_orig,local_resp,missed_bytes,history,orig_pkts,orig_ip_bytes,resp_pkts,resp_ip_bytes,orig_l2_addr,resp_l2_addr,service  
-# Which has orig_l2_addr,resp_l2_addr that are not in the zeek iot23 dataset. 
-# The zeek iot23 dataset has these columns:ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	proto	service	 duration	orig_bytes	resp_bytes	conn_state	local_orig	local_resp	missed_bytes	history	orig_pkts	orig_ip_bytes	resp_pkts	resp_ip_bytes	tunnel_parents	label	detailed_label
-# The zeek iot23 dataset tunnel_parents,label,detailed_label are not in the df.
-
-
-#TODO : create a function that takes in multiple dates and returns a dataframe
-
-
-#------------------Preprocessing------------------#
 def is_private_ip(ip_str):
     """
     Takes an IP string and returns whether the IP is private or not per RFC 1918.
@@ -187,6 +118,9 @@ def drop_columns(new_df, columns_to_drop):
 def create_history_variable(new_df):
     # break out history variable
     
+    if 'history' not in new_df.columns: 
+        new_df['history'] = 'N'  
+
     #fill NaNs with 'N'
     new_df['history'] = new_df['history'].fillna('N') 
 
@@ -200,27 +134,6 @@ def create_history_variable(new_df):
     new_df['history_has_f'] = new_df['history'].apply(lambda x: 1 if "f" in x else 0)
     new_df['history_has_N'] = new_df['history'].apply(lambda x: 1 if "N" in x else 0)
     new_df = new_df.drop(columns='history')
-
-    # if 'history'in new_df.columns:
-    #     new_df = new_df[new_df['history'].notna()].copy() #filters out rows where the 'history' column is null
-    #     new_df['history_has_S'] = new_df['history'].apply(lambda x: 1 if "S" in x else 0)
-    #     new_df['history_has_h'] = new_df['history'].apply(lambda x: 1 if "h" in x else 0)
-    #     new_df['history_has_A'] = new_df['history'].apply(lambda x: 1 if "A" in x else 0)
-    #     new_df['history_has_D'] = new_df['history'].apply(lambda x: 1 if "D" in x else 0)
-    #     new_df['history_has_a'] = new_df['history'].apply(lambda x: 1 if "a" in x else 0)
-    #     new_df['history_has_d'] = new_df['history'].apply(lambda x: 1 if "d" in x else 0)
-    #     new_df['history_has_F'] = new_df['history'].apply(lambda x: 1 if "F" in x else 0)
-    #     new_df['history_has_f'] = new_df['history'].apply(lambda x: 1 if "f" in x else 0)
-    #     new_df = new_df.drop(columns='history')
-    # else: 
-    #     new_df['history_has_S'] = 0
-    #     new_df['history_has_h'] = 0
-    #     new_df['history_has_A'] = 0
-    #     new_df['history_has_D'] = 0
-    #     new_df['history_has_a'] = 0
-    #     new_df['history_has_d'] = 0
-    #     new_df['history_has_F'] = 0
-    #     new_df['history_has_f'] = 0
     
     if 'id.orig_h'in new_df.columns:
         new_df = new_df[new_df['id.orig_h'].str.contains("::") == False]
@@ -228,7 +141,8 @@ def create_history_variable(new_df):
 
 def create_broadcast_variable(new_df):
     # create broadcast variable
-    #255 is the broadcast address for ipv4(#TODO : ask Diego)
+    # can have more than one broadcast address
+    #255 is the broadcast address for ipv4 
     if 'id.resp_h' in new_df.columns:
         new_df['is_destination_broadcast'] = new_df['id.resp_h'].apply(lambda x: 1 if "255" in x[-3:] else 0) 
     return new_df
@@ -239,8 +153,11 @@ def create_direction_variable(new_df):
         new_df['traffic_direction']        = new_df.apply(lambda x: get_traffic_direction(x['id.orig_h'], x['id.resp_h']), axis=1) 
     return new_df
 
+
 def one_hot_encode(df, column_name):
-    new_df = pd.get_dummies(data=df, columns=column_name)
+    for col in column_name:
+        if col in df.columns:
+            new_df = pd.get_dummies(data=df, columns=[col])
     return new_df
 
 def duration_to_numerical(new_df):
@@ -251,29 +168,6 @@ def duration_to_numerical(new_df):
     # Convert the time portion to a numerical format (float)
     new_df['duration'] = pd.to_timedelta(new_df['duration']).dt.total_seconds()
     return new_df 
-
-
-#TODO: create a function that takes in a dataframe and perform the preprocessing steps on it
-def preprocess(new_df):
-    
-    # Drop unnecessary columns 
-    columns_to_drop = ['ts','uid','local_orig', 'local_resp']
-    new_df.drop(columns_to_drop, axis=1, inplace=True)
-
-    # create history, broadcast, traffic_direction variables
-    new_df = create_history_variable(new_df)
-    new_df = create_broadcast_variable(new_df)
-    new_df = create_direction_variable(new_df)
-
-    # one hot encode categorical variables
-    #TODO : discuss with Diego, if there's a better way to do this. since, input dataset may have different conn state, that means the columns would be different. 
-    column_name = ['conn_state', "proto", "traffic_direction" , "service"]
-    for col in column_name:
-        if col in new_df.columns:
-            new_df = one_hot_encode(new_df, [col])
-    new_df = new_df.drop(columns=['id.orig_h', 'id.resp_h'])
-
-    return new_df
 
 
 def fill_na(new_df):
@@ -287,7 +181,6 @@ def fill_na(new_df):
             new_df[col] = 0
     new_df[columns_to_fill_with_zeros] = new_df[columns_to_fill_with_zeros].fillna(0)
     
-
     #Fill Nans with 'Other' : service
     columns_to_fill_with_other = ['service']
     if 'service' in new_df.columns:
@@ -314,38 +207,5 @@ def makedf_samecol(new_df):
 #------------------Online Normalization------------------#
 #TODO: def online_normalization(new_df):
 # can be skipped for now, since kitnet has its own normalization.
-
-
-
-def main(date_argument):
-    df_merged = merge_logs(date_argument)
-    
-    #df_merged = duration_to_numerical(df_merged)
-    df_merged_filled = fill_na(df_merged)
-    
-    # run preprocess 
-    df_merged_preprocessed = preprocess(df_merged_filled)
-
-    # make sure the columns are the same as the original df
-    df_final = makedf_samecol(df_merged_preprocessed)
-    df_final = df_final.drop(columns=['orig_l2_addr','resp_l2_addr'])
-    print("The dataframe is processed successfully, with the shape of ", df_final.shape)
-    
-    # run online normalization 
-    # can be skipped for now, since kitnet has its own normalization.
-
-    # Save the merged DataFrame to a CSV file
-    df_final.to_csv(f"df_{date_argument}.csv", index=False)
-
-    return df_final
-
-
-if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage: python data_preprcess.py <date>")
-        sys.exit(1)
-
-    date_argument = sys.argv[1]
-    df_final = main(date_argument)
 
 
