@@ -37,7 +37,7 @@ def ungzip(file_path):
     Take a file path and ungzip it
     """
     # TODO: there should probably be some error checks here
-    ungzipped_file_path = file_path.rstrip('.gz')
+    ungzipped_file_path = file_path.removesuffix('.gz')
     with gzip.open(file_path, 'rb') as gz_file:
         file_content = gz_file.read()
     return file_content.decode('utf-8')
