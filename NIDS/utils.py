@@ -59,6 +59,7 @@ def preprocess_json(json_batch):
     new_df = one_hot_encode(new_df, column_name)
 
     # make sure the columns are the same as the original df
+    #TODO: to be confirmed once HSRN EDA is done
     cols = ['conn_state_OTH', 'conn_state_REJ','conn_state_RSTO', 'conn_state_RSTOS0', 'conn_state_RSTR','conn_state_RSTRH', 
         'conn_state_S0', 'conn_state_S1', 'conn_state_S2','conn_state_S3', 'conn_state_SF', 'conn_state_SH', 'conn_state_SHR',
         'proto_tcp', 'proto_udp',
@@ -118,7 +119,7 @@ def preprocess_json_dns(json_batch):
     df[columns_to_fill_with_zeros] = df[columns_to_fill_with_zeros].fillna(0)
 
     #same columns 
-    #TODO: to be confirmed once EDA is done
+    #TODO: to be confirmed once HSRN EDA is done
     dns_cols = ['rtt', 'AA', 'TC', 'RD', 'RA', 'rejected',
        'has_rtt', 'has_qclass_name', 'has_qtype_name', 'has_rcode_name',
        'is_destination_broadcast', 
@@ -138,7 +139,58 @@ def preprocess_json_dns(json_batch):
     logging.info("Hello from preprocess_json_dns. Please implement me :)")
     return np_arr
 
+def preprocess_json_http(json_batch):
+    """
+    This function receives a json batch from the main control flow of the train 
+    functions. It should convert the dns.log of the json_batch to a numpy 2D array, apply necessary transformations,
+    then return it. 
 
+    Note: the input is only one unzipped json file. 
+    """
+    features = ['id.orig_h', "id.resp_h", "proto", "rtt","qclass_name", "qtype_name","rcode_name",
+                "AA","TC","RD","RA", "rejected"]
+        
+    data_list = []
+    for line in json_batch.splitlines():
+        # log_entry is now a single json log from the file 
+        log_entry = json.loads(line.strip())
+        # Check if each feature is present in the log_entry
+        feature_values = [log_entry.get(feature, None) for feature in features]
+        data_list.append(feature_values)
+
+    df = pd.DataFrame(data_list, columns=features) 
+
+    has_null = ['host']
+    # Create a variable to track if the feature contains null. Create a column "has_null_featurename"
+    for feature in has_null: 
+        df[f'has_{feature}'] = df[feature].notnull().astype(int)
+    
+    # create broadcast, traffic_direction variables
+    df = create_broadcast_variable(df)
+    df = create_direction_variable(df)
+
+    # one hot encode categorical variables: proto, qtype, qclass, rcode_name
+    column_name = ['version','method','status_code','traffic_direction']
+    df = one_hot_encode(df, column_name)
+
+    #TODO: to be confirmed once EDA is done
+    http_cols = ['trans_depth', 'request_body_len',
+       'response_body_len', 'has_host', 'is_destination_broadcast',
+       'method_CONNECT', 'method_GET', 
+       'status_code_0', 'status_code_200',
+       'version_0.9', 'version_1.1',
+       'traffic_direction_IPv6',
+       'traffic_direction_internal', 'traffic_direction_outgoing',
+       'traffic_direction_internal','traffic_direction_outgoing']
+    
+    df = makedf_samecol(http_cols, df)
+
+    # Convert DataFrame to NumPy array
+    np_arr = df.to_numpy(dtype=np.float32)
+    logging.info("Hello from preprocess_json_http. Please implement me :)")
+    return np_arr
+
+#==================================================================================
 # def is_private_ip(ip_str):
 #     """
 #     Takes an IP string and returns whether the IP is private or not per RFC 1918.
