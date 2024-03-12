@@ -147,8 +147,8 @@ def preprocess_json_http(json_batch):
 
     Note: the input is only one unzipped json file. 
     """
-    features = ['id.orig_h', "id.resp_h", "proto", "rtt","qclass_name", "qtype_name","rcode_name",
-                "AA","TC","RD","RA", "rejected"]
+    features = ['id.orig_h', 'id.resp_h','trans_depth','method','host','version',
+                'request_body_len','response_body_len','status_code']
         
     data_list = []
     for line in json_batch.splitlines():
