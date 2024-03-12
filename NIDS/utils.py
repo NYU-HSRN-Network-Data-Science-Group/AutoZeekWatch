@@ -18,19 +18,21 @@ import gzip
 import numpy as np
 import json
 import logging
+import ipaddress
+
 # TODO: is there a better way to handle multi-file logging aside from spamming these everywhere?
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s)')
 
 def preprocess_json(json_batch):
     """
     This function receives a json batch from the main control flow of the train 
-    functions. It should convert the json_batch to a numpy 2D array, apply necessary transformations,
+    functions. It should convert the conn.log of the json_batch to a numpy 2D array, apply necessary transformations,
     then return it. 
 
     Note: the input is only one unzipped json file. 
     """
-
-    features = ['id.orig_p', "id.resp_p", "proto", "conn_state", "missed_bytes",
+    #TODO: 'id.orig_h' or 'id.orig_p'? 
+    features = ['id.orig_h', "id.resp_h", "proto", "conn_state", "missed_bytes",
                 "orig_pkts", "orig_ip_bytes", "resp_pkts", "resp_ip_bytes"]
         
     data_list = []
@@ -57,12 +59,106 @@ def preprocess_json(json_batch):
     new_df = one_hot_encode(new_df, column_name)
 
     # make sure the columns are the same as the original df
-    new_df = makedf_samecol(new_df)
+    cols = ['conn_state_OTH', 'conn_state_REJ','conn_state_RSTO', 'conn_state_RSTOS0', 'conn_state_RSTR','conn_state_RSTRH', 
+        'conn_state_S0', 'conn_state_S1', 'conn_state_S2','conn_state_S3', 'conn_state_SF', 'conn_state_SH', 'conn_state_SHR',
+        'proto_tcp', 'proto_udp',
+        'service_dhcp', 'service_dns','service_http', 'service_irc','service_ntp',
+        'service_other', 'service_ssh','service_ssl',
+        'traffic_direction_external','traffic_direction_incoming', 
+        'traffic_direction_internal','traffic_direction_outgoing']
+    
+    new_df = makedf_samecol(cols, new_df)
 
     # Convert DataFrame to NumPy array
     np_arr = new_df.to_numpy(dtype=np.float32)
     logging.info("Hello from preprocess_json. Please implement me :)")
     return np_arr
+
+
+def preprocess_json_dns(json_batch):
+    """
+    This function receives a json batch from the main control flow of the train 
+    functions. It should convert the dns.log of the json_batch to a numpy 2D array, apply necessary transformations,
+    then return it. 
+
+    Note: the input is only one unzipped json file. 
+    """
+    features = ['id.orig_h', "id.resp_h", "proto", "rtt","qclass_name", "qtype_name","rcode_name",
+                "AA","TC","RD","RA", "rejected"]
+        
+    data_list = []
+    for line in json_batch.splitlines():
+        # log_entry is now a single json log from the file 
+        log_entry = json.loads(line.strip())
+        # Check if each feature is present in the log_entry
+        feature_values = [log_entry.get(feature, None) for feature in features]
+        data_list.append(feature_values)
+
+    df = pd.DataFrame(data_list, columns=features) 
+
+    has_null = ['rtt', 'qclass_name', 'qtype_name', 'rcode_name']
+    # Create a variable to track if the feature contains null. Create a column "has_null_featurename"
+    for feature in has_null: 
+        df[f'has_{feature}'] = df[feature].notnull().astype(int)
+    
+    # create broadcast, traffic_direction variables
+    df = create_broadcast_variable(df)
+    df = create_direction_variable(df)
+
+    # one hot encode categorical variables: proto, qtype, qclass, rcode_name
+    column_name = ['proto','qtype_name','qclass_name','rcode_name','traffic_direction']
+    df = one_hot_encode(df, column_name)
+    
+    #encode boolean features 
+    boolean_to_convert = ['AA', 'TC', 'RD', 'RA', 'rejected']
+    df[boolean_to_convert] = df[boolean_to_convert].astype(int)
+
+    #fillna with 0s:rtt
+    columns_to_fill_with_zeros = ['rtt']
+    df[columns_to_fill_with_zeros] = df[columns_to_fill_with_zeros].fillna(0)
+
+    #same columns 
+    #TODO: to be confirmed once EDA is done
+    dns_cols = ['rtt', 'AA', 'TC', 'RD', 'RA', 'rejected',
+       'has_rtt', 'has_qclass_name', 'has_qtype_name', 'has_rcode_name',
+       'is_destination_broadcast', 
+       'proto_tcp', 'proto_udp',
+       'qtype_name_*', 'qtype_name_A',
+       'qtype_name_AAAA', 'qtype_name_HTTPS', 'qtype_name_PTR',
+       'qclass_name_C_INTERNET', 'qclass_name_qclass-32769',
+       'rcode_name_NOERROR', 'rcode_name_NXDOMAIN', 
+       'traffic_direction_IPv6',
+       'traffic_direction_external','traffic_direction_incoming', 
+        'traffic_direction_internal','traffic_direction_outgoing']
+
+    df = makedf_samecol(dns_cols, df)
+
+    # Convert DataFrame to NumPy array
+    np_arr = df.to_numpy(dtype=np.float32)
+    logging.info("Hello from preprocess_json_dns. Please implement me :)")
+    return np_arr
+
+
+# def is_private_ip(ip_str):
+#     """
+#     Takes an IP string and returns whether the IP is private or not per RFC 1918.
+
+#     Parameters
+#     ----------
+#     ip_str: str
+#         String of an IP address.
+
+#     Returns
+#     -------
+#     bool: a bool of whether or not the IP is private. 
+#     """
+#     octets = [int(x) for x in ip_str.split(".")]
+#     if octets[0] == 10 \
+#             or (octets[0] == 172 and 16 <= octets[1] <= 31) \
+#             or (octets[0] == 192 and octets[1] == 168):
+#         return True
+#     else:
+#         return False
 
 def is_private_ip(ip_str):
     """
@@ -75,15 +171,17 @@ def is_private_ip(ip_str):
 
     Returns
     -------
-    bool: a bool of whether or not the IP is private. 
+    bool: a bool of whether or not the IP is private.
     """
-    octets = [int(x) for x in ip_str.split(".")]
-    if octets[0] == 10 \
-            or (octets[0] == 172 and 16 <= octets[1] <= 31) \
-            or (octets[0] == 192 and octets[1] == 168):
-        return True
-    else:
-        return False
+    try:
+        ip = ipaddress.ip_address(ip_str)
+        if ip.version == 4:
+            return ip.is_private
+        else:
+            return False  # Ignore IPv6 addresses
+    except ValueError:
+        return False  # Invalid IP address format
+
 
 def get_traffic_direction(source_ip, destination_ip):
     """
@@ -101,6 +199,11 @@ def get_traffic_direction(source_ip, destination_ip):
     -------
     str: string indicating the direction. Can be 'internal', 'outgoing', 'incoming' or 'external'.
     """
+    src_ip = ipaddress.ip_address(source_ip) 
+    dest_ip = ipaddress.ip_address(destination_ip) 
+    if src_ip.version == 6 or dest_ip.version ==6:
+        return "IPv6"
+    
     if is_private_ip(source_ip) and is_private_ip(destination_ip):
         return "internal"
     elif is_private_ip(source_ip) and not is_private_ip(destination_ip):
@@ -149,16 +252,15 @@ def create_broadcast_variable(new_df):
 
 def create_direction_variable(new_df):
     #create traffic direction variable
-    if 'traffic_direction' in new_df.columns:
-        new_df['traffic_direction']        = new_df.apply(lambda x: get_traffic_direction(x['id.orig_h'], x['id.resp_h']), axis=1) 
+    new_df['traffic_direction']        = new_df.apply(lambda x: get_traffic_direction(x['id.orig_h'], x['id.resp_h']), axis=1) 
     return new_df
 
 
 def one_hot_encode(df, column_name):
     for col in column_name:
         if col in df.columns:
-            new_df = pd.get_dummies(data=df, columns=[col])
-    return new_df
+            df = pd.get_dummies(data=df, columns=[col])
+    return df
 
 def duration_to_numerical(new_df):
     # Convert duration to string
@@ -189,16 +291,11 @@ def fill_na(new_df):
         
     return new_df
 
-def makedf_samecol(new_df):
+
+def makedf_samecol(cols, new_df):
     #Create these columns if they are not present in the original df and fill them with 0s. 
     # Ensure that all the specified columns are present even if they are not present in the original df. 
-    cols = ['conn_state_OTH', 'conn_state_REJ','conn_state_RSTO', 'conn_state_RSTOS0', 'conn_state_RSTR','conn_state_RSTRH', 
-        'conn_state_S0', 'conn_state_S1', 'conn_state_S2','conn_state_S3', 'conn_state_SF', 'conn_state_SH', 'conn_state_SHR',
-        'proto_tcp', 'proto_udp',
-        'service_dhcp', 'service_dns','service_http', 'service_irc','service_ntp',
-        'service_other', 'service_ssh','service_ssl',
-        'traffic_direction_external','traffic_direction_incoming', 
-        'traffic_direction_internal','traffic_direction_outgoing']
+
     for col in cols:
         if col not in new_df.columns:
             new_df[col] = 0
