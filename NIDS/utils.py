@@ -23,7 +23,7 @@ import ipaddress
 # TODO: is there a better way to handle multi-file logging aside from spamming these everywhere?
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s)')
 
-def preprocess_json(json_batch):
+def preprocess_json_conn(json_batch):
     """
     This function receives a json batch from the main control flow of the train 
     functions. It should convert the conn.log of the json_batch to a numpy 2D array, apply necessary transformations,
@@ -40,7 +40,6 @@ def preprocess_json(json_batch):
         # log_entry is now a single json log from the file 
         log_entry = json.loads(line.strip())
         data_list.append([log_entry[feature] for feature in features])
-
     #Re-use the preprocess function from last sem by Zoe. 
     #TODO: optimize the code via removing pandas
     new_df = pd.DataFrame(data_list, columns=features) 
@@ -48,16 +47,13 @@ def preprocess_json(json_batch):
     new_df = fill_na(new_df) 
     # Drop unnecessary columns 
     new_df = drop_columns(new_df, ['ts','uid','local_orig', 'local_resp']) 
-        
     # create history, broadcast, traffic_direction variables
     new_df = create_history_variable(new_df)
     new_df = create_broadcast_variable(new_df)
     new_df = create_direction_variable(new_df)
-
     # one hot encode categorical variables
     column_name = ['conn_state', "proto", "traffic_direction" , "service"]
     new_df = one_hot_encode(new_df, column_name)
-
     # make sure the columns are the same as the original df
     #TODO: to be confirmed once HSRN EDA is done
     cols = ['conn_state_OTH', 'conn_state_REJ','conn_state_RSTO', 'conn_state_RSTOS0', 'conn_state_RSTR','conn_state_RSTRH', 
@@ -67,12 +63,9 @@ def preprocess_json(json_batch):
         'service_other', 'service_ssh','service_ssl',
         'traffic_direction_external','traffic_direction_incoming', 
         'traffic_direction_internal','traffic_direction_outgoing']
-    
     new_df = makedf_samecol(cols, new_df)
-
     # Convert DataFrame to NumPy array
     np_arr = new_df.to_numpy(dtype=np.float32)
-    logging.info("Hello from preprocess_json. Please implement me :)")
     return np_arr
 
 
@@ -86,7 +79,6 @@ def preprocess_json_dns(json_batch):
     """
     features = ['id.orig_h', "id.resp_h", "proto", "rtt","qclass_name", "qtype_name","rcode_name",
                 "AA","TC","RD","RA", "rejected"]
-        
     data_list = []
     for line in json_batch.splitlines():
         # log_entry is now a single json log from the file 
@@ -94,7 +86,6 @@ def preprocess_json_dns(json_batch):
         # Check if each feature is present in the log_entry
         feature_values = [log_entry.get(feature, None) for feature in features]
         data_list.append(feature_values)
-
     df = pd.DataFrame(data_list, columns=features) 
 
     has_null = ['rtt', 'qclass_name', 'qtype_name', 'rcode_name']
@@ -136,7 +127,6 @@ def preprocess_json_dns(json_batch):
 
     # Convert DataFrame to NumPy array
     np_arr = df.to_numpy(dtype=np.float32)
-    logging.info("Hello from preprocess_json_dns. Please implement me :)")
     return np_arr
 
 def preprocess_json_http(json_batch):
@@ -255,7 +245,6 @@ def get_traffic_direction(source_ip, destination_ip):
     dest_ip = ipaddress.ip_address(destination_ip) 
     if src_ip.version == 6 or dest_ip.version ==6:
         return "IPv6"
-    
     if is_private_ip(source_ip) and is_private_ip(destination_ip):
         return "internal"
     elif is_private_ip(source_ip) and not is_private_ip(destination_ip):
@@ -278,7 +267,6 @@ def create_history_variable(new_df):
 
     #fill NaNs with 'N'
     new_df['history'] = new_df['history'].fillna('N') 
-
     new_df['history_has_S'] = new_df['history'].apply(lambda x: 1 if "S" in x else 0)
     new_df['history_has_h'] = new_df['history'].apply(lambda x: 1 if "h" in x else 0)
     new_df['history_has_A'] = new_df['history'].apply(lambda x: 1 if "A" in x else 0)
@@ -289,9 +277,6 @@ def create_history_variable(new_df):
     new_df['history_has_f'] = new_df['history'].apply(lambda x: 1 if "f" in x else 0)
     new_df['history_has_N'] = new_df['history'].apply(lambda x: 1 if "N" in x else 0)
     new_df = new_df.drop(columns='history')
-    
-    if 'id.orig_h'in new_df.columns:
-        new_df = new_df[new_df['id.orig_h'].str.contains("::") == False]
     return new_df 
 
 def create_broadcast_variable(new_df):
@@ -307,7 +292,6 @@ def create_direction_variable(new_df):
     new_df['traffic_direction']        = new_df.apply(lambda x: get_traffic_direction(x['id.orig_h'], x['id.resp_h']), axis=1) 
     return new_df
 
-
 def one_hot_encode(df, column_name):
     for col in column_name:
         if col in df.columns:
@@ -322,7 +306,6 @@ def duration_to_numerical(new_df):
     # Convert the time portion to a numerical format (float)
     new_df['duration'] = pd.to_timedelta(new_df['duration']).dt.total_seconds()
     return new_df 
-
 
 def fill_na(new_df):
     
@@ -342,7 +325,6 @@ def fill_na(new_df):
         new_df['service'] = new_df['service'].fillna('other')
         
     return new_df
-
 
 def makedf_samecol(cols, new_df):
     #Create these columns if they are not present in the original df and fill them with 0s. 
