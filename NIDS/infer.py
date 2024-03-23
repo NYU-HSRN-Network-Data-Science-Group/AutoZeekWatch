@@ -25,6 +25,8 @@ from joblib import dump, load
 import json 
 import tailer
 from datetime import datetime
+from multiprocessing import Process
+
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s)')
 
@@ -39,6 +41,9 @@ fh.setLevel(logging.INFO)
 fh.setFormatter(file_formatter)
 anomaly_logger.addHandler(fh)
 
+CONN_AD_ENABLED=False
+HTTP_AD_ENABLED=False
+DNS_AD_ENABLED=False
 
 def main():
     """
@@ -47,6 +52,7 @@ def main():
     and applies the model to the conn.log stream. This expects that this stream is in JSON format, 
     which can be applied to Zeek by adding "@load policy/tuning/json-logs.zeek" to local.zeek.
     """
+    global CONN_AD_ENABLED, DNS_AD_ENABLED, HTTP_AD_ENABLED 
     parser = argparse.ArgumentParser(
         description='Apply a KitNET model to current data and output anomaly scores. The logs MUST have been stored '
                     'in JSON format.')
@@ -55,133 +61,81 @@ def main():
     parser.add_argument('--log-dir', type=str, required=True, 
                         help='Zeek logdir variable, where this script can find Zeek data. Please point to the logs/ '
                              'directory.')
+    parser.add_argument('--modules', nargs='+', required=True, choices=['CONN', 'DNS', 'HTTP'],
+                        help='List of modules to enable. Choose from CONN, DNS, or HTTP. At least one module is required.')
     args = parser.parse_args()
     log_dir = args.log_dir
+    # At least 1 module must be specified
+    logging.info(f"Using Modules {args.modules}")
     logging.info(f"Using logdir: {log_dir}")
     spool_path = os.path.join(log_dir, "current") 
     logging.info(f"Using spool path: {spool_path}")
-    conn_log_path = os.path.join(spool_path, "conn.log")
-    model_path = args.model_path
-    logging.info(f"Using model path: {model_path}")
+    logging.info(f"Using model path: {args.model_path}")
+    if 'CONN' in args.modules:
+        CONN_AD_ENABLED = True
+        conn_log_path = os.path.join(spool_path, "conn.log")
+        conn_model_path = "conn_" + args.model_path
+        try:
+            kit_conn_model = load(conn_model_path)
+        except FileNotFoundError:
+            logging.error(f"Could not find model path {conn_model_path}")
+            sys.exit(1)
+        conn_process = Process(target=follow, args=(conn_log_path, kit_conn_model, "conn"))
+        conn_process.start()
+        logging.info("Started CONN Monitoring Process")
+    if 'DNS' in args.modules:
+        DNS_AD_ENABLED = True
+        dns_log_path = os.path.join(spool_path, "dns.log")
+        dns_model_path = "dns_" + args.model_path
+        try:
+            kit_dns_model = load(dns_model_path)
+        except FileNotFoundError:
+            logging.error(f"Could not find model path {dns_model_path}")
+            sys.exit(1)
+        dns_process = Process(target=follow, args=(dns_log_path, kit_dns_model, "dns"))
+        dns_process.start()
+        logging.info("Started DNS Monitoring Process")
+    if 'HTTP' in args.modules:
+        HTTP_AD_ENABLED = True
+        http_log_path = os.path.join(spool_path, "http.log")
+        http_model_path = "http_" + args.model_path
+        try:
+            kit_http_model = load(http_model_path)
+        except FileNotFoundError:
+            logging.error(f"Could not find model path {http_model_path}")
+            sys.exit(1)
+        http_process = Process(target=follow, args=(http_log_path, kit_http_model, "http"))
+        http_process.start()
+        logging.info("Started HTTP Monitoring Process")
+    logging.info("Awaiting events...")
 
-    # Loading KitNet model from file
-    try:
-        kit = load(model_path)
-    except FileNotFoundError:
-        logging.error(f"Could not find model path {model_path}")
-        sys.exit(1)
-    # tail the conn.log file in the spool directory
-    for line in tailer.follow(open(conn_log_path)):
-        result = score_json(kit, line)
+def follow(log_path, kit_model, type):
+    for line in tailer.follow(open(log_path)):
+        result = score_json(kit_model, line, type)
         anomaly_logger.info(result)
 
-
-def score_json(kit, line):
+def score_json(kit, line, type):
     """
     Given a line from the processed json, fit the model using new data and return the anomaly score.
     The result is returned as a dictionary containing the original json, and anomaly score
     """
-    line_processed = preprocess_json(line)
+    if type == "conn":
+        line_processed = preprocess_json_conn(line)
+    elif type == "dns":
+        line_processed = preprocess_json_dns(line)
+    elif type == "http":
+        line_processed = preprocess_json_http(line)
+    else:
+        logging.error(f"Invalid scoring type {type}")
+        sys.exit(1)
     assert len(line_processed) == 1
     features = ['uid', "id.resp_h", "id.orig_h", "id.orig_p", "id.resp_p", "proto"]
     features_obj = json.loads(line)
     features_dict = dict(zip(features, [features_obj[feature] for feature in features]))
     assert len(features_dict) == 6
-
     anomaly_score = kit.score_partial(line_processed[0])
     features_dict['anomaly_score'] = anomaly_score
     return features_dict
 
-
 if __name__ == "__main__":
     main()
-"""
-def main(new_instance):
-
-    #Perform preprocessing on the new instance as in the train set
-    # Load new data (latest instance of data)
-    #df_merged = duration_to_numerical(new_instance)
-
-    df = fill_na(new_instance)
-    record = {'ts': df['ts'][0], 'uid': df['uid'][0], 'id.orig_h': df['id.orig_h'][0], 'id.orig_p': df['id.orig_p'][0], 'id.resp_h': df['id.resp_h'][0], 'id.resp_p': df['id.resp_p'][0], 'anomaly_score': 0}
-    print("The record is :", record)
-    df_preprocessed = preprocess(df)
-    # make sure the columns are the same as the original df
-    df_final = makedf_samecol(df_preprocessed)
-    df_final = df_final.drop(columns=['orig_l2_addr','resp_l2_addr'])
-    print("The dataframe is processed successfully, with the shape of ", df_final.shape)
-
-    #Load existing model 
-    kit = load('kit.joblib')
-
-    # Make prediction 
-    anomaly_score = kit.score(np.array(df_final))
-    
-    # Input : id.orig_p,id.resp_p,duration,orig_bytes,resp_bytes,missed_bytes,orig_pkts,orig_ip_bytes,resp_pkts,resp_ip_bytes,history_has_S,history_has_h,history_has_A,history_has_D,history_has_a,history_has_d,history_has_F,history_has_f,is_destination_broadcast,conn_state_OTH,conn_state_RSTO,conn_state_RSTRH,conn_state_S0,conn_state_S1,conn_state_SF,proto_tcp,proto_udp,traffic_direction_internal,traffic_direction_outgoing,service_dns,service_http,service_ntp,service_other,service_ssl,conn_state_REJ,conn_state_RSTOS0,conn_state_RSTR,conn_state_S2,conn_state_S3,conn_state_SH,conn_state_SHR,service_dhcp,service_irc,service_ssh,traffic_direction_external,traffic_direction_incoming
-    #  Save prediction to json file (anomaly score, id.orig_p, id.resp_p)
-    # Extract id.orig_p and id.resp_p from df_final
-    if anomaly_score:
-        record['anomaly_score'] = float(anomaly_score[0])
-
-    update_record(record)
-
-
-def update_record(dic_record):
-    try:
-        # Add the current date to the record
-        current_date = datetime.now().strftime("%Y-%m-%d")
-        record_file = f'/opt/zeek/anomaly_record/anomaly_record_{current_date}.txt'
-        #record_file = f'../anomaly_record/anomaly_record_{current_date}.txt' #remember to create the folder first
-
-        # Convert every value to string (excluding 'anomaly_score')
-        for key, value in dic_record.items():
-            if key != 'anomaly_score':
-                dic_record[key] = str(value)
-
-        # Write to the file
-        with open(record_file, 'a') as convert_file: 
-            # Move the cursor to a new line
-            convert_file.write('\n')
-            convert_file.write(json.dumps(dic_record))
-        print(f"Record updated successfully in {record_file}")
-    except Exception as e:
-        print(f"Error updating record: {str(e)}")
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description=__doc__)
-    # Follow the file as it grows
-
-    # To an absolute path like this
-    #log_file_path = '/opt/zeek/logs/current/conn.log'
-    # for line in tailer.follow(open(log_file_path)):
-    #     # Fix boolean values in JSON string
-    #     line = line.replace('true', 'True').replace('false', 'False')
-    #     # Replace single quotes with double quotes
-    #     line = line.replace("'", "\"")
-    #     # Create a DataFrame from the modified JSON string
-    #     conn_dict = json.loads(line)
-    #     df = pd.DataFrame([conn_dict], index=[0])
-    #     try:
-    #         main(df)
-    #     except:
-    #         print("There are some missing columns, so the fit_score won't work. \n")
-    #         print("Here are the column names for this instance:", df.columns)
-
-
-    # Alternative: Read the entire file into a Pandas DataFrame
-    with open('../logs/current/conn.log') as file:
-    #with open(log_file_path) as file:
-        for line in file:
-            if line.strip() :
-                # Replace single quotes with double quotes
-                line_with_double_quotes = line.replace("'", "\"")
-                # Use json.loads
-                conn_dict = json.loads(line_with_double_quotes)
-                df = pd.DataFrame([conn_dict], index=[0])
-                try:
-                    main(df)
-                except:
-                    print("There are some missing columns, so the fit_score won't work. \n")
-                    print("Here are the column names for this instance:", df.columns)
-
-"""
