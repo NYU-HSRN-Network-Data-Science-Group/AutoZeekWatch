@@ -31,6 +31,10 @@ from utils import *
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s)')
 #MODEL_PATH = 'kit.joblib'
 #LOAD_MODEL = False       
+# The different files the AD can operate on
+CONN_AD_ENABLED=False
+HTTP_AD_ENABLED=False
+DNS_AD_ENABLED=False
 
 def ungzip(file_path):
     """
@@ -61,6 +65,7 @@ def main():
     Taking the user-provided log directory as input, recursively searches the directory 
     for all date-based subdirectories, and trains models on all `conn.log` files. 
     """
+    global CONN_AD_ENABLED, DNS_AD_ENABLED, HTTP_AD_ENABLED 
     parser = argparse.ArgumentParser(
         description='Trains a KitNET model on the specified log directory. The logs MUST have been stored in JSON format.')
     # Eventually we will need to implement some sort of directory to house these as people will retrain
@@ -79,16 +84,43 @@ def main():
                         help='The learning rate for the model.')
     parser.add_argument('--hidden-ratio', type=float, default=0.5,  
                         help='The hidden ratio for the model.')  
+    parser.add_argument('--modules', nargs='+', required=True, choices=['CONN', 'DNS', 'HTTP'],
+                        help='List of modules to enable. Choose from CONN, DNS, or HTTP. At least one module is required.')
     args = parser.parse_args()
     log_dir = args.log_dir
+    # At least 1 module must be specified
+    if 'CONN' in args.modules:
+        CONN_AD_ENABLED = True
+    if 'DNS' in args.modules:
+        DNS_AD_ENABLED = True
+    if 'HTTP' in args.modules:
+        HTTP_AD_ENABLED = True
     # create kitnet model
-    kit = KitNet(
-        max_size_ae=args.max_size_ae, 
-        grace_feature_mapping=args.grace_feature_mapping, 
-        grace_anomaly_detector=args.grace_anomaly_detector, 
-        learning_rate=args.learning_rate, 
-        hidden_ratio=args.hidden_ratio 
-    )
+    if CONN_AD_ENABLED:
+        kit_conn_model = KitNet(
+            max_size_ae=args.max_size_ae, 
+            grace_feature_mapping=args.grace_feature_mapping, 
+            grace_anomaly_detector=args.grace_anomaly_detector, 
+            learning_rate=args.learning_rate, 
+            hidden_ratio=args.hidden_ratio 
+        )
+    if DNS_AD_ENABLED:
+        kit_dns_model = KitNet(
+            max_size_ae=args.max_size_ae, 
+            grace_feature_mapping=args.grace_feature_mapping, 
+            grace_anomaly_detector=args.grace_anomaly_detector, 
+            learning_rate=args.learning_rate, 
+            hidden_ratio=args.hidden_ratio 
+        )
+    if HTTP_AD_ENABLED:
+        kit_http_model = KitNet(
+            max_size_ae=args.max_size_ae, 
+            grace_feature_mapping=args.grace_feature_mapping, 
+            grace_anomaly_detector=args.grace_anomaly_detector, 
+            learning_rate=args.learning_rate, 
+            hidden_ratio=args.hidden_ratio 
+        )
+    logging.info(f"Using Modules {args.modules}")
     logging.info(f"Using logdir: {log_dir}") 
     logging.info(
         f"Using Parameters - max_size_ae: {args.max_size_ae}, "
@@ -109,7 +141,7 @@ def main():
             for file in os.listdir(current_dir_path):
                 # file is now any given file in the historical data directory
                 current_file_path = os.path.join(current_dir_path, file)
-                if "conn." in file:
+                if "conn." in file or "dns." in file or "http." in file:
                     # get the whole file in memory
                     logging.info(f"Opening file {current_file_path}")
                     json_data_file = ungzip(current_file_path) 
@@ -118,16 +150,26 @@ def main():
                     except json.JSONDecodeError as e:
                         logging.error(f"File {current_file_path} is not JSON. Skipping.")
                         continue 
-                    np_arr = preprocess_json(json_data_file)
-                    train_batch(kit, np_arr)
+                    if "conn." in file and CONN_AD_ENABLED:
+                        np_arr = preprocess_json_conn(json_data_file)
+                        train_batch(kit_conn_model, np_arr)
+                    elif "dns." in file and DNS_AD_ENABLED:
+                        np_arr = preprocess_json_dns(json_data_file)
+                        train_batch(kit_dns_model, np_arr)  
+                    elif "dns." in file and HTTP_AD_ENABLED:
+                        np_arr = preprocess_json_http(json_data_file)
+                        train_batch(kit_http_model, np_arr)  
 
     # TODO: Before we exit the main function, dump the trained model to disk
-    dump(kit, args.model_path) 
-    logging.info(f"Model is saved successfully as {args.model_path}.") 
-
-
-
-
+    if CONN_AD_ENABLED:
+        dump(kit_conn_model, "conn_" + args.model_path) 
+        logging.info(f"Model is saved successfully as conn_{args.model_path}.") 
+    if DNS_AD_ENABLED:
+        dump(kit_conn_model, "dns_" + args.model_path) 
+        logging.info(f"Model is saved successfully as dns_{args.model_path}.") 
+    if HTTP_AD_ENABLED:
+        dump(kit_conn_model, "http_" + args.model_path) 
+        logging.info(f"Model is saved successfully as http_{args.model_path}.") 
 
 if __name__ == "__main__":
     main()
