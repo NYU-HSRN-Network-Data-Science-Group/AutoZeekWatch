@@ -143,20 +143,34 @@ def main():
                 current_file_path = os.path.join(current_dir_path, file)
                 if "conn." in file or "dns." in file or "http." in file:
                     # get the whole file in memory
-                    logging.info(f"Opening file {current_file_path}")
-                    json_data_file = ungzip(current_file_path) 
-                    try:    
-                        json.loads(json_data_file.split('\n')[0])
-                    except json.JSONDecodeError as e:
-                        logging.error(f"File {current_file_path} is not JSON. Skipping.")
-                        continue 
                     if "conn." in file and CONN_AD_ENABLED:
+                        logging.info(f"Opening file {current_file_path}")
+                        json_data_file = ungzip(current_file_path) 
+                        try:    
+                            json.loads(json_data_file.split('\n')[0])
+                        except json.JSONDecodeError as e:
+                            logging.error(f"File {current_file_path} is not JSON. Skipping.")
+                            continue 
                         np_arr = preprocess_json_conn(json_data_file)
                         train_batch(kit_conn_model, np_arr)
                     elif "dns." in file and DNS_AD_ENABLED:
+                        logging.info(f"Opening file {current_file_path}")
+                        json_data_file = ungzip(current_file_path) 
+                        try:    
+                            json.loads(json_data_file.split('\n')[0])
+                        except json.JSONDecodeError as e:
+                            logging.error(f"File {current_file_path} is not JSON. Skipping.")
+                            continue 
                         np_arr = preprocess_json_dns(json_data_file)
                         train_batch(kit_dns_model, np_arr)  
-                    elif "dns." in file and HTTP_AD_ENABLED:
+                    elif "http." in file and HTTP_AD_ENABLED:
+                        logging.info(f"Opening file {current_file_path}")
+                        json_data_file = ungzip(current_file_path) 
+                        try:    
+                            json.loads(json_data_file.split('\n')[0])
+                        except json.JSONDecodeError as e:
+                            logging.error(f"File {current_file_path} is not JSON. Skipping.")
+                            continue 
                         np_arr = preprocess_json_http(json_data_file)
                         train_batch(kit_http_model, np_arr)  
 
