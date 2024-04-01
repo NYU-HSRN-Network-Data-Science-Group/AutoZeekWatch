@@ -204,8 +204,8 @@ def main():
                         except json.JSONDecodeError as e:
                             logging.error(f"File {current_file_path} is not JSON. Skipping.")
                             continue 
-                        np_arr = preprocess_json_http(json_data_file)
-                        train_batch(kit_http_model, np_arr)  
+                        np_arr = preprocess_json_ssh(json_data_file)
+                        train_batch(kit_ssh_model, np_arr)  
                     elif "ssl." in file and SSL_AD_ENABLED:
                         logging.info(f"Opening file {current_file_path}")
                         json_data_file = ungzip(current_file_path) 
@@ -214,8 +214,8 @@ def main():
                         except json.JSONDecodeError as e:
                             logging.error(f"File {current_file_path} is not JSON. Skipping.")
                             continue 
-                        np_arr = preprocess_json_http(json_data_file)
-                        train_batch(kit_http_model, np_arr)  
+                        np_arr = preprocess_json_ssl(json_data_file)
+                        train_batch(kit_ssl_model, np_arr)  
 
     # TODO: Before we exit the main function, dump the trained model to disk
     if CONN_AD_ENABLED:
