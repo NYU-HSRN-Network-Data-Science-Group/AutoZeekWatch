@@ -170,10 +170,131 @@ def preprocess_json_http(json_batch):
        'status_code_0', 'status_code_200',
        'version_0.9', 'version_1.1',
        'traffic_direction_IPv6',
-       'traffic_direction_internal', 'traffic_direction_outgoing',
-       'traffic_direction_internal','traffic_direction_outgoing']
+       'traffic_direction_external','traffic_direction_incoming', 
+        'traffic_direction_internal','traffic_direction_outgoing']
     
     df = makedf_samecol(http_cols, df)
+
+    # Convert DataFrame to NumPy array
+    np_arr = df.to_numpy(dtype=np.float32)
+    logging.info("Hello from preprocess_json_http. Please implement me :)")
+    return np_arr
+
+
+def preprocess_json_ssh(json_batch):
+    """
+    This function receives a json batch from the main control flow of the train 
+    functions. It should convert the dns.log of the json_batch to a numpy 2D array, apply necessary transformations,
+    then return it. 
+
+    Note: the input is only one unzipped json file. 
+    """
+    features = ['id.orig_h', 'id.resp_h','trans_depth','method','host','version',
+                'request_body_len','response_body_len','status_code']
+        
+    data_list = []
+    for line in json_batch.splitlines():
+        # log_entry is now a single json log from the file 
+        log_entry = json.loads(line.strip())
+        # Check if each feature is present in the log_entry
+        feature_values = [log_entry.get(feature, None) for feature in features]
+        data_list.append(feature_values)
+
+    df = pd.DataFrame(data_list, columns=features) 
+
+    # create broadcast, traffic_direction variables
+    df = create_broadcast_variable(df)
+    df = create_direction_variable(df)
+
+    #label encode: auth_success, direction
+    #TODO: ask Diego is it's the same as 'traffic direction'
+    df['auth_success'] = df['auth_success'].replace({False: 0, True: 1})
+    df['direction'] = df['direction'].replace({'OUTBOUND': 1, 'INBOUND': 0})
+
+    # one hot encode categorical variables: proto, qtype, qclass, rcode_name
+    column_name = ['version','traffic_direction']
+    df = one_hot_encode(df, column_name)
+
+    #TODO: to be confirmed once EDA is done
+    ssh_cols = ['auth_success', 'auth_attempts', 'direction',
+       'is_destination_broadcast', 'version_2', 
+       'traffic_direction_external','traffic_direction_incoming', 
+        'traffic_direction_internal','traffic_direction_outgoing']
+    
+    df = makedf_samecol(ssh_cols, df)
+
+    # Convert DataFrame to NumPy array
+    np_arr = df.to_numpy(dtype=np.float32)
+    logging.info("Hello from preprocess_json_http. Please implement me :)")
+    return np_arr
+
+def preprocess_json_ssl(json_batch):
+    """
+    This function receives a json batch from the main control flow of the train 
+    functions. It should convert the dns.log of the json_batch to a numpy 2D array, apply necessary transformations,
+    then return it. 
+
+    Note: the input is only one unzipped json file. 
+    """
+    features = ['id.orig_h', 'id.resp_h','version','resumed','established',
+            'ssl_history','cert_chain_fps','client_cert_chain_fps','sni_matches_cert','validation_status']
+    #Ignore 'cipher','curve','server_name','next_protocol' columns for now, we can include them if they are useful later on.
+
+    data_list = []
+    for line in json_batch.splitlines():
+        # log_entry is now a single json log from the file 
+        log_entry = json.loads(line.strip())
+        # Check if each feature is present in the log_entry
+        feature_values = [log_entry.get(feature, None) for feature in features]
+        data_list.append(feature_values)
+
+    df = pd.DataFrame(data_list, columns=features) 
+
+    has_null = ['version', 'cert_chain_fps', 'client_cert_chain_fps', 'sni_matches_cert', 'validation_status']
+    # Create a variable to track if the feature contains null. Create a column "has_null_featurename"
+    for feature in has_null: 
+        df[f'has_{feature}'] = df[feature].notnull().astype(int)
+    
+
+    # create broadcast, traffic_direction variables
+    df = create_broadcast_variable(df)
+    df = create_direction_variable(df)
+
+    #fillna, considering null as False
+    df['sni_matches_cert'] = df['sni_matches_cert'].fillna(False)
+    df['cert_chain_fps'] = df['cert_chain_fps'].fillna("").apply(list)
+    df['client_cert_chain_fps'] = df['client_cert_chain_fps'].fillna("").apply(list)
+
+    #boolean to int
+    boolean_to_convert = ['resumed','established','sni_matches_cert']
+    df[boolean_to_convert] = df[boolean_to_convert].astype(int)
+    # one hot encode categorical variables: version, traffic_direction
+    column_name = ['version','traffic_direction']
+    df = one_hot_encode(df, column_name)
+
+    #Make the length of the cert_chain_fps and client_cert_chain_fps as a new feature
+    df['cert_chain_fps'] = df['cert_chain_fps'].apply(lambda x: len(x))
+    df['client_cert_chain_fps'] = df['client_cert_chain_fps'].apply(lambda x: len(x))
+
+    #create history variable
+    df = create_sslhistory_variable(df)
+
+    #TODO: to be confirmed once EDA is done
+    # List of new columns created from ssl_history
+    # Define all possible characters in 'ssl_history'
+    all_characters = set('HCSVTXKRNYGFWUABDOPMIJLQhcsvtxkrnygfwuabdopmijlq')
+    history_col = [f'ssl_history_has_{char}' for char in all_characters]
+    ssl_cols = ['resumed', 'established', 
+        'cert_chain_fps', 'client_cert_chain_fps', 'sni_matches_cert',
+        'has_version', 'has_cert_chain_fps',
+        'has_client_cert_chain_fps', 'has_sni_matches_cert',
+        'has_validation_status', 'is_destination_broadcast', 
+        'version_TLSv12','version_TLSv13', 
+        'traffic_direction_external','traffic_direction_incoming', 
+        'traffic_direction_internal','traffic_direction_outgoing']
+    ssl_cols = ssl_cols + history_col
+
+    df = makedf_samecol(ssl_cols, df)
 
     # Convert DataFrame to NumPy array
     np_arr = df.to_numpy(dtype=np.float32)
@@ -277,6 +398,26 @@ def create_history_variable(new_df):
     new_df['history_has_f'] = new_df['history'].apply(lambda x: 1 if "f" in x else 0)
     new_df['history_has_N'] = new_df['history'].apply(lambda x: 1 if "N" in x else 0)
     new_df = new_df.drop(columns='history')
+    return new_df 
+
+def create_sslhistory_variable(new_df):
+    # break out history variable
+    
+    if 'ssl_history' not in new_df.columns: 
+        new_df['ssl_history'] = ''  #TODO:?
+
+    #fill NaNs with 'N'
+    new_df['ssl_history'] = new_df['ssl_history'].fillna('') 
+    
+    # Define all possible letters in 'ssl_history'
+    all_characters = set('HCSVTXKRNYGFWUABDOPMIJLQhcsvtxkrnygfwuabdopmijlq')
+
+    # Create binary columns for each character
+    for char in all_characters:
+        new_df[f'ssl_history_has_{char}'] = new_df['ssl_history'].apply(lambda x: 1 if char in x else 0)
+
+
+    new_df = new_df.drop(columns='ssl_history')
     return new_df 
 
 def create_broadcast_variable(new_df):
