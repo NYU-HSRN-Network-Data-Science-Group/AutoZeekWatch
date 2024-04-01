@@ -86,8 +86,8 @@ def main():
                         help='The learning rate for the model.')
     parser.add_argument('--hidden-ratio', type=float, default=0.5,  
                         help='The hidden ratio for the model.')  
-    parser.add_argument('--modules', nargs='+', required=True, choices=['CONN', 'DNS', 'HTTP'],
-                        help='List of modules to enable. Choose from CONN, DNS, or HTTP. At least one module is required.')
+    parser.add_argument('--modules', nargs='+', required=True, choices=['CONN', 'DNS', 'HTTP', 'SSH', 'SSL'],
+                        help='List of modules to enable. Choose from CONN, DNS, HTTP, SSH, or SSL. At least one module is required.')
     args = parser.parse_args()
     log_dir = args.log_dir
     # At least 1 module must be specified
