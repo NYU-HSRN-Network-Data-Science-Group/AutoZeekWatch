@@ -23,6 +23,22 @@ import ipaddress
 # TODO: is there a better way to handle multi-file logging aside from spamming these everywhere?
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s)')
 
+def ungzip(file_path):
+    """
+    Take a file path and ungzip it
+    """
+    # TODO: there should probably be some error checks here
+
+    # if the file is not a .gz file, read the content directly and return it 
+    if (not file_path.endswith('.gz')) and (file_path.endswith('.json')):
+        with open(file_path, 'rb') as f:
+            return f.read().decode('utf-8') 
+        
+    ungzipped_file_path = file_path.removesuffix('.gz')
+    with gzip.open(file_path, 'rb') as gz_file:
+        file_content = gz_file.read()
+    return file_content.decode('utf-8')
+
 def preprocess_json_conn(json_batch):
     """
     This function receives a json batch from the main control flow of the train 
