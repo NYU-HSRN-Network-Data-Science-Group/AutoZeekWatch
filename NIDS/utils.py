@@ -30,7 +30,7 @@ def ungzip(file_path):
     # TODO: there should probably be some error checks here
 
     # if the file is not a .gz file, read the content directly and return it 
-    if (not file_path.endswith('.gz')) and (file_path.endswith('.json')):
+    if (not file_path.endswith('.gz')) and (file_path.endswith('.log')):
         with open(file_path, 'rb') as f:
             return f.read().decode('utf-8') 
         
@@ -38,6 +38,7 @@ def ungzip(file_path):
     with gzip.open(file_path, 'rb') as gz_file:
         file_content = gz_file.read()
     return file_content.decode('utf-8')
+
 
 def preprocess_json_conn(json_batch):
     """
