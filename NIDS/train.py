@@ -35,6 +35,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 CONN_AD_ENABLED=False
 HTTP_AD_ENABLED=False
 DNS_AD_ENABLED=False
+SSH_AD_ENABLED=False
+SSL_AD_ENABLED=False
 
 def ungzip(file_path):
     """
@@ -65,7 +67,7 @@ def main():
     Taking the user-provided log directory as input, recursively searches the directory 
     for all date-based subdirectories, and trains models on all `conn.log` files. 
     """
-    global CONN_AD_ENABLED, DNS_AD_ENABLED, HTTP_AD_ENABLED 
+    global CONN_AD_ENABLED, DNS_AD_ENABLED, HTTP_AD_ENABLED, SSH_AD_ENABLED, SSL_AD_ENABLED
     parser = argparse.ArgumentParser(
         description='Trains a KitNET model on the specified log directory. The logs MUST have been stored in JSON format.')
     # Eventually we will need to implement some sort of directory to house these as people will retrain
@@ -84,8 +86,8 @@ def main():
                         help='The learning rate for the model.')
     parser.add_argument('--hidden-ratio', type=float, default=0.5,  
                         help='The hidden ratio for the model.')  
-    parser.add_argument('--modules', nargs='+', required=True, choices=['CONN', 'DNS', 'HTTP'],
-                        help='List of modules to enable. Choose from CONN, DNS, or HTTP. At least one module is required.')
+    parser.add_argument('--modules', nargs='+', required=True, choices=['CONN', 'DNS', 'HTTP', 'SSH', 'SSL'],
+                        help='List of modules to enable. Choose from CONN, DNS, HTTP, SSH, or SSL. At least one module is required.')
     args = parser.parse_args()
     log_dir = args.log_dir
     # At least 1 module must be specified
@@ -95,6 +97,11 @@ def main():
         DNS_AD_ENABLED = True
     if 'HTTP' in args.modules:
         HTTP_AD_ENABLED = True
+    if 'SSH' in args.modules:
+        SSH_AD_ENABLED = True
+    if 'SSL' in args.modules:
+        SSL_AD_ENABLED = True
+    
     # create kitnet model
     if CONN_AD_ENABLED:
         kit_conn_model = KitNet(
@@ -114,6 +121,22 @@ def main():
         )
     if HTTP_AD_ENABLED:
         kit_http_model = KitNet(
+            max_size_ae=args.max_size_ae, 
+            grace_feature_mapping=args.grace_feature_mapping, 
+            grace_anomaly_detector=args.grace_anomaly_detector, 
+            learning_rate=args.learning_rate, 
+            hidden_ratio=args.hidden_ratio 
+        )
+    if SSH_AD_ENABLED:
+        kit_ssh_model = KitNet(
+            max_size_ae=args.max_size_ae, 
+            grace_feature_mapping=args.grace_feature_mapping, 
+            grace_anomaly_detector=args.grace_anomaly_detector, 
+            learning_rate=args.learning_rate, 
+            hidden_ratio=args.hidden_ratio 
+        )
+    if SSL_AD_ENABLED:
+        kit_ssl_model = KitNet(
             max_size_ae=args.max_size_ae, 
             grace_feature_mapping=args.grace_feature_mapping, 
             grace_anomaly_detector=args.grace_anomaly_detector, 
@@ -173,17 +196,43 @@ def main():
                             continue 
                         np_arr = preprocess_json_http(json_data_file)
                         train_batch(kit_http_model, np_arr)  
+                    elif "ssh." in file and SSH_AD_ENABLED:
+                        logging.info(f"Opening file {current_file_path}")
+                        json_data_file = ungzip(current_file_path) 
+                        try:    
+                            json.loads(json_data_file.split('\n')[0])
+                        except json.JSONDecodeError as e:
+                            logging.error(f"File {current_file_path} is not JSON. Skipping.")
+                            continue 
+                        np_arr = preprocess_json_ssh(json_data_file)
+                        train_batch(kit_ssh_model, np_arr)  
+                    elif "ssl." in file and SSL_AD_ENABLED:
+                        logging.info(f"Opening file {current_file_path}")
+                        json_data_file = ungzip(current_file_path) 
+                        try:    
+                            json.loads(json_data_file.split('\n')[0])
+                        except json.JSONDecodeError as e:
+                            logging.error(f"File {current_file_path} is not JSON. Skipping.")
+                            continue 
+                        np_arr = preprocess_json_ssl(json_data_file)
+                        train_batch(kit_ssl_model, np_arr)  
 
     # TODO: Before we exit the main function, dump the trained model to disk
     if CONN_AD_ENABLED:
         dump(kit_conn_model, "conn_" + args.model_path) 
         logging.info(f"Model is saved successfully as conn_{args.model_path}.") 
     if DNS_AD_ENABLED:
-        dump(kit_conn_model, "dns_" + args.model_path) 
+        dump(kit_dns_model, "dns_" + args.model_path) 
         logging.info(f"Model is saved successfully as dns_{args.model_path}.") 
     if HTTP_AD_ENABLED:
-        dump(kit_conn_model, "http_" + args.model_path) 
+        dump(kit_http_model, "http_" + args.model_path) 
         logging.info(f"Model is saved successfully as http_{args.model_path}.") 
+    if SSH_AD_ENABLED:
+        dump(kit_ssh_model, "ssh_" + args.model_path) 
+        logging.info(f"Model is saved successfully as ssh_{args.model_path}.") 
+    if SSL_AD_ENABLED:
+        dump(kit_ssl_model, "ssl_" + args.model_path) 
+        logging.info(f"Model is saved successfully as ssl_{args.model_path}.") 
 
 if __name__ == "__main__":
     main()
