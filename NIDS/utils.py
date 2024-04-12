@@ -48,22 +48,27 @@ def preprocess_json_conn(json_batch):
 
     Note: the input is only one unzipped json file. 
     """
-    #TODO: 'id.orig_h' or 'id.orig_p'? 
-    features = ['id.orig_h', "id.resp_h", "proto", "conn_state", "missed_bytes",
+    # features = ['id.orig_h', "id.resp_h", "proto", "conn_state", "missed_bytes",
+    #             "orig_pkts", "orig_ip_bytes", "resp_pkts", "resp_ip_bytes"]
+    features = ["id.orig_h", "id.resp_h", "proto", "service", "duration", "conn_state", 
+                "local_orig","local_resp","missed_bytes","history", 
                 "orig_pkts", "orig_ip_bytes", "resp_pkts", "resp_ip_bytes"]
-        
+    #TODO: add features: duration, local_orig, local_resp 
     data_list = []
     for line in json_batch.splitlines():
         # log_entry is now a single json log from the file 
         log_entry = json.loads(line.strip())
-        data_list.append([log_entry[feature] for feature in features])
+        # data_list.append([log_entry[feature] for feature in features])
+        # Check if each feature is present in the log_entry
+        feature_values = [log_entry.get(feature, None) for feature in features]
+        data_list.append(feature_values)
     #Re-use the preprocess function from last sem by Zoe. 
     #TODO: optimize the code via removing pandas
     new_df = pd.DataFrame(data_list, columns=features) 
     #Fill NaNs with 0s : duration, orig_bytes resp_bytes, if there are no columns, create one and fill with 0s 
     new_df = fill_na(new_df) 
-    # Drop unnecessary columns 
-    new_df = drop_columns(new_df, ['ts','uid','local_orig', 'local_resp']) 
+    # # Drop unnecessary columns 
+    # new_df = drop_columns(new_df, ['ts','uid','local_orig', 'local_resp']) 
     # create history, broadcast, traffic_direction variables
     new_df = create_history_variable(new_df)
     new_df = create_broadcast_variable(new_df)
@@ -71,15 +76,19 @@ def preprocess_json_conn(json_batch):
     # one hot encode categorical variables
     column_name = ['conn_state', "proto", "traffic_direction" , "service"]
     new_df = one_hot_encode(new_df, column_name)
+    # Convert the boolean values in columns "local_orig" and "local_resp" to 1 and 0s
+    new_df['local_orig'] = new_df['local_orig'].astype(int)
+    new_df['local_resp'] = new_df['local_resp'].astype(int)
     # make sure the columns are the same as the original df
     #TODO: to be confirmed once HSRN EDA is done
     cols = ['conn_state_OTH', 'conn_state_REJ','conn_state_RSTO', 'conn_state_RSTOS0', 'conn_state_RSTR','conn_state_RSTRH', 
         'conn_state_S0', 'conn_state_S1', 'conn_state_S2','conn_state_S3', 'conn_state_SF', 'conn_state_SH', 'conn_state_SHR',
-        'proto_tcp', 'proto_udp',
+        'proto_tcp', 'proto_udp', 
         'service_dhcp', 'service_dns','service_http', 'service_irc','service_ntp',
         'service_other', 'service_ssh','service_ssl',
         'traffic_direction_external','traffic_direction_incoming', 
-        'traffic_direction_internal','traffic_direction_outgoing']
+        'traffic_direction_internal','traffic_direction_outgoing',
+        "local_orig","local_resp","missed_bytes","orig_pkts","orig_ip_bytes","resp_pkts","resp_ip_bytes"]
     new_df = makedf_samecol(cols, new_df)
     # Convert DataFrame to NumPy array
     np_arr = new_df.to_numpy(dtype=np.float32)
@@ -492,6 +501,27 @@ def makedf_samecol(cols, new_df):
         if col not in new_df.columns:
             new_df[col] = 0
     return new_df[cols]
+
+def get_raw_conn(json_data_file):
+    features = ["id.orig_h", "id.resp_h", "proto", "service", "duration", "conn_state", "local_orig","local_resp",
+            "missed_bytes","history", "orig_pkts", "orig_ip_bytes", "resp_pkts", "resp_ip_bytes"]
+    data_list = []
+    for line in json_data_file.splitlines():
+        # log_entry is now a single json log from the file
+        log_entry = json.loads(line.strip())
+        
+        # Check if each feature is present in the log_entry
+        feature_values = [log_entry.get(feature, None) for feature in features]
+        data_list.append(feature_values)
+
+    df = pd.DataFrame(data_list, columns=features)
+    df = create_broadcast_variable(df)
+    df = create_direction_variable(df)
+    # Convert the boolean values in columns "local_orig" and "local_resp" to 1 and 0s
+    df['local_orig'] = df['local_orig'].astype(int)
+    df['local_resp'] = df['local_resp'].astype(int)
+    
+    return df 
 
 #------------------Online Normalization------------------#
 #TODO: def online_normalization(new_df):
