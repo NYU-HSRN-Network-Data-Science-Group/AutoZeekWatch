@@ -5,14 +5,14 @@ with open("README.md", "r") as fh:
 
 setup(
     name='AutoZeekWatch',
-    version='0.1.1',
+    version='{{VERSION_PLACEHOLDER}}',
     license='MIT',
     description="Network Intrusion Detection using Zeek logs",
-    url="https://github.com/zoe70416/NIDS/",
+    url="https://github.com/NYU-HSRN-Network-Data-Science-Group/NIDS/",
     project_urls={
-        'Documentation': 'https://github.com/zoe70416/NIDS',
-        'Bug Reports': 'https://github.com/zoe70416/NIDS/issues',
-        'Source Code': 'https://github.com/zoe70416/NIDS',
+        'Documentation': 'https://github.com/NYU-HSRN-Network-Data-Science-Group/NIDS',
+        'Bug Reports': 'https://github.com/NYU-HSRN-Network-Data-Science-Group/NIDS/issues',
+        'Source Code': 'https://github.com/NYU-HSRN-Network-Data-Science-Group/NIDS',
     },
     packages=find_packages(),
     long_description=long_description,
