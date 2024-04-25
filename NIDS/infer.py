@@ -44,6 +44,8 @@ anomaly_logger.addHandler(fh)
 CONN_AD_ENABLED=False
 HTTP_AD_ENABLED=False
 DNS_AD_ENABLED=False
+SSH_AD_ENABLED=False
+SSL_AD_ENABLED=False
 
 def main():
     """
@@ -52,7 +54,7 @@ def main():
     and applies the model to the conn.log stream. This expects that this stream is in JSON format, 
     which can be applied to Zeek by adding "@load policy/tuning/json-logs.zeek" to local.zeek.
     """
-    global CONN_AD_ENABLED, DNS_AD_ENABLED, HTTP_AD_ENABLED 
+    global CONN_AD_ENABLED, DNS_AD_ENABLED, HTTP_AD_ENABLED, SSL_AD_ENABLED, SSH_AD_ENABLED
     parser = argparse.ArgumentParser(
         description='Apply a KitNET model to current data and output anomaly scores. The logs MUST have been stored '
                     'in JSON format.')
@@ -61,8 +63,8 @@ def main():
     parser.add_argument('--log-dir', type=str, required=True, 
                         help='Zeek logdir variable, where this script can find Zeek data. Please point to the logs/ '
                              'directory.')
-    parser.add_argument('--modules', nargs='+', required=True, choices=['CONN', 'DNS', 'HTTP'],
-                        help='List of modules to enable. Choose from CONN, DNS, or HTTP. At least one module is required.')
+    parser.add_argument('--modules', nargs='+', required=True, choices=['CONN', 'DNS', 'HTTP', 'SSH', 'SSL'],
+                        help='List of modules to enable. Choose from CONN, DNS, HTTP, SSL or SSH. At least one module is required.')
     args = parser.parse_args()
     log_dir = args.log_dir
     # At least 1 module must be specified
@@ -107,6 +109,30 @@ def main():
         http_process = Process(target=follow, args=(http_log_path, kit_http_model, "http"))
         http_process.start()
         logging.info("Started HTTP Monitoring Process")
+    if 'SSL' in args.modules:
+        SSL_AD_ENABLED = True
+        ssl_log_path = os.path.join(spool_path, "ssl.log")
+        ssl_model_path = "ssl_" + args.model_path
+        try:
+            kit_ssl_model = load(ssl_model_path)
+        except FileNotFoundError:
+            logging.error(f"Could not find model path {ssl_model_path}")
+            sys.exit(1)
+        ssl_process = Process(target=follow, args=(ssl_log_path, kit_ssl_model, "ssl"))
+        ssl_process.start()
+        logging.info("Started SSL Monitoring Process")
+    if 'SSH' in args.modules:
+        SSH_AD_ENABLED = True
+        ssh_log_path = os.path.join(spool_path, "ssh.log")
+        ssh_model_path = "ssh_" + args.model_path
+        try:
+            kit_ssh_model = load(ssh_model_path)
+        except FileNotFoundError:
+            logging.error(f"Could not find model path {ssh_model_path}")
+            sys.exit(1)
+        ssh_process = Process(target=follow, args=(ssh_log_path, kit_ssh_model, "ssh"))
+        ssh_process.start()
+        logging.info("Started SSH Monitoring Process")
     logging.info("Awaiting events...")
 
 def follow(log_path, kit_model, type):
@@ -125,14 +151,18 @@ def score_json(kit, line, type):
         line_processed = preprocess_json_dns(line)
     elif type == "http":
         line_processed = preprocess_json_http(line)
+    elif type == "ssh":
+        line_processed = preprocess_json_ssh(line)
+    elif type == "ssl":
+        line_processed = preprocess_json_ssl(line)
     else:
         logging.error(f"Invalid scoring type {type}")
         sys.exit(1)
     assert len(line_processed) == 1
-    features = ['uid', "id.resp_h", "id.orig_h", "id.orig_p", "id.resp_p", "proto"]
+    features = ['uid', "id.resp_h", "id.orig_h", "id.orig_p", "id.resp_p"]
     features_obj = json.loads(line)
     features_dict = dict(zip(features, [features_obj[feature] for feature in features]))
-    assert len(features_dict) == 6
+    assert len(features_dict) == 5
     anomaly_score = kit.score_partial(line_processed[0])
     features_dict['anomaly_score'] = anomaly_score
     return features_dict

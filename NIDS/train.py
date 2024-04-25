@@ -164,7 +164,7 @@ def main():
             for file in os.listdir(current_dir_path):
                 # file is now any given file in the historical data directory
                 current_file_path = os.path.join(current_dir_path, file)
-                if "conn." in file or "dns." in file or "http." in file:
+                if "conn." in file or "dns." in file or "http." in file or "ssl." in file or "ssh." in file:
                     # get the whole file in memory
                     if "conn." in file and CONN_AD_ENABLED:
                         logging.info(f"Opening file {current_file_path}")

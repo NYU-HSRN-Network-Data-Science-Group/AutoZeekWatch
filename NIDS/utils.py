@@ -203,7 +203,6 @@ def preprocess_json_http(json_batch):
 
     # Convert DataFrame to NumPy array
     np_arr = df.to_numpy(dtype=np.float32)
-    logging.info("Hello from preprocess_json_http. Please implement me :)")
     return np_arr
 
 
@@ -251,7 +250,6 @@ def preprocess_json_ssh(json_batch):
 
     # Convert DataFrame to NumPy array
     np_arr = df.to_numpy(dtype=np.float32)
-    logging.info("Hello from preprocess_json_http. Please implement me :)")
     return np_arr
 
 def preprocess_json_ssl(json_batch):
@@ -324,7 +322,6 @@ def preprocess_json_ssl(json_batch):
 
     # Convert DataFrame to NumPy array
     np_arr = df.to_numpy(dtype=np.float32)
-    logging.info("Hello from preprocess_json_http. Please implement me :)")
     return np_arr
 
 #==================================================================================
