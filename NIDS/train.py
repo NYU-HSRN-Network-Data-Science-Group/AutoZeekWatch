@@ -24,6 +24,7 @@ import os
 #from NIDS.package.data_preprocess import * 
 from joblib import dump, load
 import subprocess
+from datetime import datetime
 import json 
 import gzip
 from utils import *
@@ -40,13 +41,37 @@ SSL_AD_ENABLED=False
 
 def ungzip(file_path):
     """
-    Take a file path and ungzip it
+    Take a file path and ungzip it.
     """
     # TODO: there should probably be some error checks here
     ungzipped_file_path = file_path.removesuffix('.gz')
     with gzip.open(file_path, 'rb') as gz_file:
         file_content = gz_file.read()
     return file_content.decode('utf-8')
+
+def validate_json(file_path):
+    """ 
+    Validates Zeek JSON file structure.
+    """
+    logging.info(f"Opening file {file_path}")
+    json_data_file = ungzip(file_path) 
+    try:    
+        json.loads(json_data_file.split('\n')[0])
+    except json.JSONDecodeError as e:
+        logging.error(f"File {file_path} is not JSON. Skipping.")
+        return None
+    return json_data_file
+
+def valid_date(s):
+    """
+    Validates string passed as start_date or end_date arguments. 
+    """
+    if s is None:
+        return None
+    try:
+        return datetime.strptime(s, "%Y-%m-%d")
+    except ValueError:
+        raise argparse.ArgumentTypeError("Date must be in the format YYYY-MM-DD")
 
 def train_batch(kit, np_arr):
     """
@@ -88,6 +113,10 @@ def main():
                         help='The hidden ratio for the model.')  
     parser.add_argument('--modules', nargs='+', required=True, choices=['CONN', 'DNS', 'HTTP', 'SSH', 'SSL'],
                         help='List of modules to enable. Choose from CONN, DNS, HTTP, SSH, or SSL. At least one module is required.')
+    parser.add_argument('--start-date', type=valid_date, default=None,
+                        help='Optional start date to train. Ignores logs before this date. Must be of the form YYYY-MM-DD.')
+    parser.add_argument('--end-date', type=valid_date, default=None,
+                        help='Optional end date to train. Ignores logs after this date. Must be of the form YYYY-MM-DD.')
     args = parser.parse_args()
     log_dir = args.log_dir
     # At least 1 module must be specified
@@ -102,6 +131,16 @@ def main():
     if 'SSL' in args.modules:
         SSL_AD_ENABLED = True
     
+    # Check date format 
+    if args.start_date:
+        start_date = args.start_date
+    else:
+        start_date = None
+    if args.end_date:
+        end_date = args.end_date
+    else:
+        end_date = None
+
     # create kitnet model
     if CONN_AD_ENABLED:
         kit_conn_model = KitNet(
@@ -143,6 +182,8 @@ def main():
             learning_rate=args.learning_rate, 
             hidden_ratio=args.hidden_ratio 
         )
+    logging.info(f"Using Start Date: {start_date}.")
+    logging.info(f"Using End Date: {end_date}.")
     logging.info(f"Using Modules {args.modules}")
     logging.info(f"Using logdir: {log_dir}") 
     logging.info(
@@ -159,63 +200,46 @@ def main():
             continue     
         # `current` is a symlink for the current-day logs, we should not train on them as these files are in use. 
         if not os.path.islink(current_dir_path):
+            date_part = current_dir_path.split('/')[-1]
+            current_dir_date = datetime.strptime(date_part, "%Y-%m-%d")
+            # Skip dates if provided
+            if current_dir_date < start_date:
+                logging.info(f"Skipping {current_dir_path} (Before Start Date)")
+                continue
+            if current_dir_date > end_date:
+                logging.info(f"Skipping {current_dir_path} (After End Date)")
+                continue
             # sub_dir is now any given historical data directory 
             logging.info(f"Checking {current_dir_path}")
             for file in os.listdir(current_dir_path):
                 # file is now any given file in the historical data directory
                 current_file_path = os.path.join(current_dir_path, file)
-                if "conn." in file or "dns." in file or "http." in file or "ssl." in file or "ssh." in file:
-                    # get the whole file in memory
-                    if "conn." in file and CONN_AD_ENABLED:
-                        logging.info(f"Opening file {current_file_path}")
-                        json_data_file = ungzip(current_file_path) 
-                        try:    
-                            json.loads(json_data_file.split('\n')[0])
-                        except json.JSONDecodeError as e:
-                            logging.error(f"File {current_file_path} is not JSON. Skipping.")
-                            continue 
-                        np_arr = preprocess_json_conn(json_data_file)
-                        train_batch(kit_conn_model, np_arr)
-                    elif "dns." in file and DNS_AD_ENABLED:
-                        logging.info(f"Opening file {current_file_path}")
-                        json_data_file = ungzip(current_file_path) 
-                        try:    
-                            json.loads(json_data_file.split('\n')[0])
-                        except json.JSONDecodeError as e:
-                            logging.error(f"File {current_file_path} is not JSON. Skipping.")
-                            continue 
-                        np_arr = preprocess_json_dns(json_data_file)
-                        train_batch(kit_dns_model, np_arr)  
-                    elif "http." in file and HTTP_AD_ENABLED:
-                        logging.info(f"Opening file {current_file_path}")
-                        json_data_file = ungzip(current_file_path) 
-                        try:    
-                            json.loads(json_data_file.split('\n')[0])
-                        except json.JSONDecodeError as e:
-                            logging.error(f"File {current_file_path} is not JSON. Skipping.")
-                            continue 
-                        np_arr = preprocess_json_http(json_data_file)
-                        train_batch(kit_http_model, np_arr)  
-                    elif "ssh." in file and SSH_AD_ENABLED:
-                        logging.info(f"Opening file {current_file_path}")
-                        json_data_file = ungzip(current_file_path) 
-                        try:    
-                            json.loads(json_data_file.split('\n')[0])
-                        except json.JSONDecodeError as e:
-                            logging.error(f"File {current_file_path} is not JSON. Skipping.")
-                            continue 
-                        np_arr = preprocess_json_ssh(json_data_file)
-                        train_batch(kit_ssh_model, np_arr)  
-                    elif "ssl." in file and SSL_AD_ENABLED:
-                        logging.info(f"Opening file {current_file_path}")
-                        json_data_file = ungzip(current_file_path) 
-                        try:    
-                            json.loads(json_data_file.split('\n')[0])
-                        except json.JSONDecodeError as e:
-                            logging.error(f"File {current_file_path} is not JSON. Skipping.")
-                            continue 
-                        np_arr = preprocess_json_ssl(json_data_file)
-                        train_batch(kit_ssl_model, np_arr)  
+                # Brings the whole file in memory
+                if "conn." in file and CONN_AD_ENABLED:
+                    json_data_file = validate_json(current_file_path)
+                    if json_data_file is None : continue
+                    np_arr = preprocess_json_conn(json_data_file)
+                    train_batch(kit_conn_model, np_arr)
+                elif "dns." in file and DNS_AD_ENABLED:
+                    json_data_file = validate_json(current_file_path)
+                    if json_data_file is None : continue
+                    np_arr = preprocess_json_dns(json_data_file)
+                    train_batch(kit_dns_model, np_arr)  
+                elif "http." in file and HTTP_AD_ENABLED:
+                    json_data_file = validate_json(current_file_path)
+                    if json_data_file is None : continue
+                    np_arr = preprocess_json_http(json_data_file)
+                    train_batch(kit_http_model, np_arr)  
+                elif "ssh." in file and SSH_AD_ENABLED:
+                    json_data_file = validate_json(current_file_path)
+                    if json_data_file is None : continue
+                    np_arr = preprocess_json_ssh(json_data_file)
+                    train_batch(kit_ssh_model, np_arr)  
+                elif "ssl." in file and SSL_AD_ENABLED:
+                    json_data_file = validate_json(current_file_path)
+                    if json_data_file is None : continue
+                    np_arr = preprocess_json_ssl(json_data_file)
+                    train_batch(kit_ssl_model, np_arr)  
 
     # TODO: Before we exit the main function, dump the trained model to disk
     if CONN_AD_ENABLED:
