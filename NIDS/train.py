@@ -203,10 +203,10 @@ def main():
             date_part = current_dir_path.split('/')[-1]
             current_dir_date = datetime.strptime(date_part, "%Y-%m-%d")
             # Skip dates if provided
-            if current_dir_date < start_date:
+            if start_date is not None and current_dir_date < start_date:
                 logging.info(f"Skipping {current_dir_path} (Before Start Date)")
                 continue
-            if current_dir_date > end_date:
+            if end_date is not None and current_dir_date > end_date:
                 logging.info(f"Skipping {current_dir_path} (After End Date)")
                 continue
             # sub_dir is now any given historical data directory 
