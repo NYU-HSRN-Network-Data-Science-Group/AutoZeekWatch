@@ -269,8 +269,8 @@ def preprocess_json_ssh(json_batch):
 
     Note: the input is only one unzipped json file. 
     """
-    features = ['id.orig_h', 'id.resp_h','trans_depth','method','host','version',
-                'request_body_len','response_body_len','status_code']
+    features = ['id.orig_h', 'id.resp_h','version','auth_success','auth_attempts',
+                'direction','version','traffic_direction']
         
     data_list = []
     for line in json_batch.splitlines():
