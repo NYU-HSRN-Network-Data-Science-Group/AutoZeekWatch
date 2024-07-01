@@ -54,6 +54,12 @@ If you would like to train the model in the background:
 python AutoZeekWatch/train.py --log-dir <ZEEK_LOG_DIR> --modules <MODULE1> <MODULE2> &
 ```
 
+You can list your current Zeek log directory with:
+
+```
+zeekctl config | grep logdir
+```
+
 ## Examples
 
 ### Train a Model on Connection Data and SSH Data
