@@ -1,4 +1,5 @@
 # AutoZeekWatch
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 AutoZeekWatch is a real-time, modular, multiprocessed, configurable A.I. anomaly detector for [Zeek](https://zeek.org/) logs. AutoZeekWatch enables you to generate anomaly scores for Zeek logs im real time, and correlate them with the initial 5-tuple and Zeek UID for downstream analysis, automated mitigation, and more. 
 
