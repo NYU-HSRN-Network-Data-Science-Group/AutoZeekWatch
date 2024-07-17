@@ -18,127 +18,36 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.pipeline import Pipeline
 import sys
 import logging
-import os 
+import os
 from utils import *
-import pyod 
+import pyod
 from joblib import dump, load
-import json 
+import json
 import tailer
 from datetime import datetime
-from multiprocessing import Process
+from multiprocessing import Process, Queue
+import threading
+import logging.config
 
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s)')
+def logger_thread(q):
+    while True:
+        record = q.get()
+        if record is None:
+            break
+        logger = logging.getLogger(record.name)
+        logger.handle(record)
 
-# create logger for writing anomaly to file
-anomaly_logger = logging.getLogger('anomaly')
-anomaly_logger.setLevel(logging.INFO)
 
-# create file handler
-fh = logging.FileHandler('anomalies.log')
-file_formatter = logging.Formatter('%(asctime)s - %(message)s')
-fh.setLevel(logging.INFO)
-fh.setFormatter(file_formatter)
-anomaly_logger.addHandler(fh)
-
-CONN_AD_ENABLED=False
-HTTP_AD_ENABLED=False
-DNS_AD_ENABLED=False
-SSH_AD_ENABLED=False
-SSL_AD_ENABLED=False
-
-def main():
-    """
-    The main control flow for the application. This script takes in as arguments the 
-    location of the zeek spool directory (also found in the zeek/logs/current symlink)
-    and applies the model to the conn.log stream. This expects that this stream is in JSON format, 
-    which can be applied to Zeek by adding "@load policy/tuning/json-logs.zeek" to local.zeek.
-    """
-    global CONN_AD_ENABLED, DNS_AD_ENABLED, HTTP_AD_ENABLED, SSL_AD_ENABLED, SSH_AD_ENABLED
-    parser = argparse.ArgumentParser(
-        description='Apply a KitNET model to current data and output anomaly scores. The logs MUST have been stored '
-                    'in JSON format.')
-    parser.add_argument('--model-path', type=str, default='kit.joblib',  
-                        help='The path to the model file to load.') 
-    parser.add_argument('--log-dir', type=str, required=True, 
-                        help='Zeek logdir variable, where this script can find Zeek data. Please point to the logs/ '
-                             'directory.')
-    parser.add_argument('--modules', nargs='+', required=True, choices=['CONN', 'DNS', 'HTTP', 'SSH', 'SSL'],
-                        help='List of modules to enable. Choose from CONN, DNS, HTTP, SSL or SSH. At least one module is required.')
-    args = parser.parse_args()
-    log_dir = args.log_dir
-    # At least 1 module must be specified
-    logging.info(f"Using Modules {args.modules}")
-    logging.info(f"Using logdir: {log_dir}")
-    spool_path = os.path.join(log_dir, "current") 
-    logging.info(f"Using spool path: {spool_path}")
-    logging.info(f"Using model path: {args.model_path}")
-    if 'CONN' in args.modules:
-        CONN_AD_ENABLED = True
-        conn_log_path = os.path.join(spool_path, "conn.log")
-        conn_model_path = "conn_" + args.model_path
-        try:
-            kit_conn_model = load(conn_model_path)
-        except FileNotFoundError:
-            logging.error(f"Could not find model path {conn_model_path}")
-            sys.exit(1)
-        conn_process = Process(target=follow, args=(conn_log_path, kit_conn_model, "conn"))
-        conn_process.start()
-        logging.info("Started CONN Monitoring Process")
-    if 'DNS' in args.modules:
-        DNS_AD_ENABLED = True
-        dns_log_path = os.path.join(spool_path, "dns.log")
-        dns_model_path = "dns_" + args.model_path
-        try:
-            kit_dns_model = load(dns_model_path)
-        except FileNotFoundError:
-            logging.error(f"Could not find model path {dns_model_path}")
-            sys.exit(1)
-        dns_process = Process(target=follow, args=(dns_log_path, kit_dns_model, "dns"))
-        dns_process.start()
-        logging.info("Started DNS Monitoring Process")
-    if 'HTTP' in args.modules:
-        HTTP_AD_ENABLED = True
-        http_log_path = os.path.join(spool_path, "http.log")
-        http_model_path = "http_" + args.model_path
-        try:
-            kit_http_model = load(http_model_path)
-        except FileNotFoundError:
-            logging.error(f"Could not find model path {http_model_path}")
-            sys.exit(1)
-        http_process = Process(target=follow, args=(http_log_path, kit_http_model, "http"))
-        http_process.start()
-        logging.info("Started HTTP Monitoring Process")
-    if 'SSL' in args.modules:
-        SSL_AD_ENABLED = True
-        ssl_log_path = os.path.join(spool_path, "ssl.log")
-        ssl_model_path = "ssl_" + args.model_path
-        try:
-            kit_ssl_model = load(ssl_model_path)
-        except FileNotFoundError:
-            logging.error(f"Could not find model path {ssl_model_path}")
-            sys.exit(1)
-        ssl_process = Process(target=follow, args=(ssl_log_path, kit_ssl_model, "ssl"))
-        ssl_process.start()
-        logging.info("Started SSL Monitoring Process")
-    if 'SSH' in args.modules:
-        SSH_AD_ENABLED = True
-        ssh_log_path = os.path.join(spool_path, "ssh.log")
-        ssh_model_path = "ssh_" + args.model_path
-        try:
-            kit_ssh_model = load(ssh_model_path)
-        except FileNotFoundError:
-            logging.error(f"Could not find model path {ssh_model_path}")
-            sys.exit(1)
-        ssh_process = Process(target=follow, args=(ssh_log_path, kit_ssh_model, "ssh"))
-        ssh_process.start()
-        logging.info("Started SSH Monitoring Process")
-    logging.info("Awaiting events...")
-
-def follow(log_path, kit_model, type):
+def follow(log_path, kit_model, type, q):
+    qh = logging.handlers.QueueHandler(q)
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    logger.addHandler(qh)
     for line in tailer.follow(open(log_path)):
         result = score_json(kit_model, line, type)
-        anomaly_logger.info(result)
+        logger.info(result)
+
 
 def score_json(kit, line, type):
     """
@@ -166,6 +75,129 @@ def score_json(kit, line, type):
     anomaly_score = kit.score_partial(line_processed[0])
     features_dict['anomaly_score'] = anomaly_score
     return features_dict
+
+
+def main():
+    """
+    The main control flow for the application. This script takes in as arguments the 
+    location of the zeek spool directory (also found in the zeek/logs/current symlink)
+    and applies the model to the conn.log stream. This expects that this stream is in JSON format, 
+    which can be applied to Zeek by adding "@load policy/tuning/json-logs.zeek" to local.zeek.
+    """
+    global CONN_AD_ENABLED, DNS_AD_ENABLED, HTTP_AD_ENABLED, SSL_AD_ENABLED, SSH_AD_ENABLED, conn_process, dns_process, http_process, ssh_process, ssl_process
+    parser = argparse.ArgumentParser(
+        description='Apply a KitNET model to current data and output anomaly scores. The logs MUST have been stored '
+                    'in JSON format.')
+    parser.add_argument('--model-path', type=str, default='kit.joblib',
+                        help='The path to the model file to load.')
+    parser.add_argument('--log-dir', type=str, required=True,
+                        help='Zeek logdir variable, where this script can find Zeek data. Please point to the logs/ '
+                             'directory.')
+    parser.add_argument('--modules', nargs='+', required=True, choices=['CONN', 'DNS', 'HTTP', 'SSH', 'SSL'],
+                        help='List of modules to enable. Choose from CONN, DNS, HTTP, SSL or SSH. At least one module is required.')
+    args = parser.parse_args()
+    log_dir = args.log_dir
+    # At least 1 module must be specified
+    logging.info(f"Using Modules {args.modules}")
+    logging.info(f"Using logdir: {log_dir}")
+    spool_path = os.path.join(log_dir, "current")
+    logging.info(f"Using spool path: {spool_path}")
+    logging.info(f"Using model path: {args.model_path}")
+
+    q = Queue()
+    logging_config = {
+        'version': 1,
+        'formatters': {
+            'detailed': {
+                'class': 'logging.Formatter',
+                'format': '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+            }
+        },
+        'handlers': {
+            'file': {
+                'class': 'logging.FileHandler',
+                'filename': 'anomalies.log',
+                'mode': 'w',
+                'formatter': 'detailed',
+            }
+        },
+        'root': {
+            'level': 'INFO',
+            'handlers': ['file']
+        }
+    }
+    logging.config.dictConfig(logging_config)
+    lp = threading.Thread(target=logger_thread, args=(q,))
+    lp.start()
+    conn_process, dns_process, http_process, ssl_process, ssh_process = None, None, None, None, None
+    if 'CONN' in args.modules:
+        CONN_AD_ENABLED = True
+        conn_log_path = os.path.join(spool_path, "conn.log")
+        conn_model_path = "conn_" + args.model_path
+        try:
+            kit_conn_model = load(conn_model_path)
+        except FileNotFoundError:
+            logging.error(f"Could not find model path {conn_model_path}")
+            sys.exit(1)
+        conn_process = Process(target=follow, args=(conn_log_path, kit_conn_model, "conn", q))
+        conn_process.start()
+        logging.info("Started CONN Monitoring Process")
+    if 'DNS' in args.modules:
+        DNS_AD_ENABLED = True
+        dns_log_path = os.path.join(spool_path, "dns.log")
+        dns_model_path = "dns_" + args.model_path
+        try:
+            kit_dns_model = load(dns_model_path)
+        except FileNotFoundError:
+            logging.error(f"Could not find model path {dns_model_path}")
+            sys.exit(1)
+        dns_process = Process(target=follow, args=(dns_log_path, kit_dns_model, "dns", q))
+        dns_process.start()
+        logging.info("Started DNS Monitoring Process")
+    if 'HTTP' in args.modules:
+        HTTP_AD_ENABLED = True
+        http_log_path = os.path.join(spool_path, "http.log")
+        http_model_path = "http_" + args.model_path
+        try:
+            kit_http_model = load(http_model_path)
+        except FileNotFoundError:
+            logging.error(f"Could not find model path {http_model_path}")
+            sys.exit(1)
+        http_process = Process(target=follow, args=(http_log_path, kit_http_model, "http", q))
+        http_process.start()
+        logging.info("Started HTTP Monitoring Process")
+    if 'SSL' in args.modules:
+        SSL_AD_ENABLED = True
+        ssl_log_path = os.path.join(spool_path, "ssl.log")
+        ssl_model_path = "ssl_" + args.model_path
+        try:
+            kit_ssl_model = load(ssl_model_path)
+        except FileNotFoundError:
+            logging.error(f"Could not find model path {ssl_model_path}")
+            sys.exit(1)
+        ssl_process = Process(target=follow, args=(ssl_log_path, kit_ssl_model, "ssl", q))
+        ssl_process.start()
+        logging.info("Started SSL Monitoring Process")
+    if 'SSH' in args.modules:
+        SSH_AD_ENABLED = True
+        ssh_log_path = os.path.join(spool_path, "ssh.log")
+        ssh_model_path = "ssh_" + args.model_path
+        try:
+            kit_ssh_model = load(ssh_model_path)
+        except FileNotFoundError:
+            logging.error(f"Could not find model path {ssh_model_path}")
+            sys.exit(1)
+        ssh_process = Process(target=follow, args=(ssh_log_path, kit_ssh_model, "ssh", q))
+        ssh_process.start()
+        logging.info("Started SSH Monitoring Process")
+
+    logging.info("Awaiting events...")
+    for p in [conn_process, dns_process, http_process, ssl_process, ssh_process]:
+        if p is not None:
+            p.join()
+    q.put(None)
+    lp.join()
+
 
 if __name__ == "__main__":
     main()
