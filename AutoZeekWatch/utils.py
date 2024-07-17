@@ -13,12 +13,14 @@ By Zoe Hsu
 import sys
 import os
 import subprocess
-import pandas as pd
 import gzip
 import numpy as np
 import json
 import logging
 import ipaddress
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+import pandas as pd
 
 # TODO: is there a better way to handle multi-file logging aside from spamming these everywhere?
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s (%(filename)s)')

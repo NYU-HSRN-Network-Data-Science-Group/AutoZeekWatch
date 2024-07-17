@@ -129,7 +129,7 @@ def main():
     logging.config.dictConfig(logging_config)
     lp = threading.Thread(target=logger_thread, args=(q,))
     lp.start()
-
+    conn_process, dns_process, http_process, ssl_process, ssh_process = None, None, None, None, None
     if 'CONN' in args.modules:
         CONN_AD_ENABLED = True
         conn_log_path = os.path.join(spool_path, "conn.log")
