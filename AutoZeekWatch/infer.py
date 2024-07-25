@@ -36,36 +36,36 @@ def logger_thread(q):
         if record is None:
             break
         logger = logging.getLogger(record.name)
-        logger.handle(record)
+        # logger.handle(record)
 
 
-def follow(log_path, kit_model, type, q):
+def follow(log_path, kit_model, model_type, q):
     qh = logging.handlers.QueueHandler(q)
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
     logger.addHandler(qh)
     for line in tailer.follow(open(log_path)):
-        result = score_json(kit_model, line, type)
-        logger.info(result)
+        result = score_json(kit_model, line, model_type)
+        logger.info(f'{model_type}: {result}')
 
 
-def score_json(kit, line, type):
+def score_json(kit, line, model_type):
     """
     Given a line from the processed json, fit the model using new data and return the anomaly score.
     The result is returned as a dictionary containing the original json, and anomaly score
     """
-    if type == "conn":
+    if model_type == "conn":
         line_processed = preprocess_json_conn(line)
-    elif type == "dns":
+    elif model_type == "dns":
         line_processed = preprocess_json_dns(line)
-    elif type == "http":
+    elif model_type == "http":
         line_processed = preprocess_json_http(line)
-    elif type == "ssh":
+    elif model_type == "ssh":
         line_processed = preprocess_json_ssh(line)
-    elif type == "ssl":
+    elif model_type == "ssl":
         line_processed = preprocess_json_ssl(line)
     else:
-        logging.error(f"Invalid scoring type {type}")
+        logging.error(f"Invalid scoring type {model_type}")
         sys.exit(1)
     assert len(line_processed) == 1
     features = ['uid', "id.resp_h", "id.orig_h", "id.orig_p", "id.resp_p"]
