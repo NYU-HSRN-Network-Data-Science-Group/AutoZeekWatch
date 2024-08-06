@@ -36,7 +36,7 @@ def logger_thread(q):
         if record is None:
             break
         logger = logging.getLogger(record.name)
-        # logger.handle(record)
+        logger.handle(record)
 
 
 def follow(log_path, kit_model, model_type, q):
