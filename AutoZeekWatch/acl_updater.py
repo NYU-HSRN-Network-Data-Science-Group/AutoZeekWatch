@@ -21,6 +21,8 @@ import threading
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+ip_anomaly_dict = {}
+
 
 def update_moving_average(ip_anomaly_dict, ip, anomaly_score, alpha=0.3, threshold=0.7):
     if ip not in ip_anomaly_dict:
@@ -86,7 +88,7 @@ def maintain_states(ip_anomaly_dict):
 
 
 def main(log_path, threshold):
-    global ip_anomaly_dict = {}
+    global ip_anomaly_dict
     # Schedule cleaning up every minute
     maintain_states(ip_anomaly_dict)
 
@@ -115,8 +117,8 @@ def main(log_path, threshold):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Process log file and monitor anomaly scores.')
-    parser.add_argument('--log_path', type=str, help='Path to the log file')
-    parser.add_argument('--threshold', type=float, help='Threshold for the moving average')
+    parser.add_argument('--log_path', type=str, required=True, help='Path to the log file')
+    parser.add_argument('--threshold', type=float, required=True, help='Threshold for the moving average')
     args = parser.parse_args()
 
     main(args.log_path, args.threshold)
