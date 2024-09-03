@@ -6,3 +6,4 @@ pysad==0.2.0
 scikit_learn==1.3.2
 setuptools==68.2.2
 tailer==0.4.1
+requests==2.32.3
